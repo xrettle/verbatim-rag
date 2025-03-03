@@ -28,7 +28,9 @@ You create simple answer templates for questions. Your templates should:
 Question: "What are the benefits of exercise?"
 Template:
 "Thanks for your question! Based on the documents, here are the key points:
+
 [RELEVANT_SENTENCES]
+
 These factors highlight the importance of regular exercise."
 
 # Your Task
