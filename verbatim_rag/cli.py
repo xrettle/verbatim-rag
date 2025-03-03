@@ -10,7 +10,6 @@ from verbatim_rag import (
     VerbatimIndex,
     VerbatimRAG,
     DocumentLoader,
-    TextSplitter,
     TemplateManager,
 )
 
@@ -153,17 +152,17 @@ def main():
         print(f"Loaded {len(documents)} documents")
 
         # Split documents into chunks
-        print("Splitting documents into chunks...")
-        text_splitter = TextSplitter(
-            chunk_size=args.chunk_size, chunk_overlap=args.chunk_overlap
-        )
-        chunked_documents = text_splitter.split_documents(documents)
-        print(f"Created {len(chunked_documents)} document chunks")
+        # print("Splitting documents into chunks...")
+        # text_splitter = TextSplitter(
+        #     chunk_size=args.chunk_size, chunk_overlap=args.chunk_overlap
+        # )
+        # chunked_documents = text_splitter.split_documents(documents)
+        # print(f"Created {len(chunked_documents)} document chunks")
 
         # Create and populate the index
         print("Creating and populating the index...")
         index = VerbatimIndex()
-        index.add_documents(chunked_documents)
+        index.add_documents(documents)
 
         # Save the index
         print(f"Saving index to: {args.output}")
@@ -225,11 +224,7 @@ def main():
             index,
             model=args.model,
             k=args.k,
-            simple_template=args.template,
             template_manager=template_manager,
-            template_match_threshold=args.match_threshold
-            if args.templates_file
-            else 0.0,
         )
 
         # Process the query
@@ -282,11 +277,7 @@ def main():
             index,
             model=args.model,
             k=args.k,
-            simple_template=args.template,
             template_manager=template_manager,
-            template_match_threshold=args.match_threshold
-            if args.templates_file
-            else 0.0,
         )
 
         print("Verbatim RAG Interactive Mode")
