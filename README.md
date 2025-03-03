@@ -54,7 +54,6 @@ Create response templates for common question types:
 verbatim-rag template \
     --questions "When was X built?" "Who designed X?" \
     --output templates.json \
-    --model gpt-4
 ```
 
 ### 3. Query the System
