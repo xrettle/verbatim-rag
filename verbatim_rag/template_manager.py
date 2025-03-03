@@ -5,12 +5,12 @@ This module provides functionality to create, save, load, and match templates
 for use with the VerbatimRAG system.
 """
 
-import os
 import json
+import os
 import re
-from typing import Optional, Tuple
-import openai
 from difflib import SequenceMatcher
+
+import openai
 
 DEFAULT_TEMPLATE_SYSTEM_PROMPT = """
 You create simple answer templates for questions. Your templates should:
@@ -126,7 +126,7 @@ class TemplateManager:
             with open(filepath, "r") as f:
                 self.templates = json.load(f)
 
-    def get_template(self, question: str) -> Optional[str]:
+    def get_template(self, question: str) -> str | None:
         """
         Get a template for a question.
 
@@ -136,8 +136,8 @@ class TemplateManager:
         return self.templates.get(question)
 
     def match_template(
-        self, question: str, threshold: Optional[float] = None
-    ) -> Tuple[Optional[str], float]:
+        self, question: str, threshold: float | None = None
+    ) -> tuple[str | None, float]:
         """
         Match a question to an existing template.
 

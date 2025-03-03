@@ -4,8 +4,9 @@ Index class for the Verbatim RAG system.
 
 import os
 import pickle
-import numpy as np
+
 import faiss
+import numpy as np
 import openai
 
 from verbatim_rag.document import Document

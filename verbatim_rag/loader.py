@@ -2,8 +2,9 @@
 Document loader utility for the Verbatim RAG system.
 """
 
-import os
 import csv
+import os
+
 import pandas as pd
 
 from verbatim_rag.document import Document
@@ -44,7 +45,6 @@ class DocumentLoader:
             reader = csv.DictReader(f)
 
             for i, row in enumerate(reader):
-                # If content_columns is specified, only include those columns
                 if content_columns:
                     content_parts = []
                     for col in content_columns:
@@ -52,7 +52,6 @@ class DocumentLoader:
                             content_parts.append(f"{col}: {row[col]}")
                     content = "\n".join(content_parts)
                 else:
-                    # Otherwise, include all columns
                     content = "\n".join([f"{k}: {v}" for k, v in row.items()])
 
                 # Create a document for this row
@@ -79,7 +78,6 @@ class DocumentLoader:
         documents = []
 
         for i, row in df.iterrows():
-            # If content_columns is specified, only include those columns
             if content_columns:
                 content_parts = []
                 for col in content_columns:
@@ -87,7 +85,6 @@ class DocumentLoader:
                         content_parts.append(f"{col}: {row[col]}")
                 content = "\n".join(content_parts)
             else:
-                # Otherwise, include all columns
                 content = "\n".join([f"{k}: {v}" for k, v in row.items()])
 
             # Create a document for this row
