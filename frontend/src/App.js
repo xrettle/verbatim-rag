@@ -5,10 +5,6 @@ import {
   Container,
   Grid,
   GridItem,
-  useColorMode,
-  useColorModeValue,
-  useDisclosure,
-  useBreakpointValue,
   extendTheme,
 } from '@chakra-ui/react';
 import { AnimatePresence } from 'framer-motion';

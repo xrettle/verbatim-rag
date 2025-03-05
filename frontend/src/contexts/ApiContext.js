@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 // Create context
@@ -15,6 +15,9 @@ export const ApiProvider = ({ children }) => {
   const [currentQuery, setCurrentQuery] = useState(null);
   const [numDocs, setNumDocs] = useState(5); // Default to 5 documents
 
+  // Add a ref to track document updates
+  const documentUpdateTimeoutRef = useRef(null);
+  
   // Function to check if resources are loaded
   const refreshStatus = useCallback(async () => {
     setIsLoading(true);
@@ -46,16 +49,106 @@ export const ApiProvider = ({ children }) => {
     setIsLoading(true);
     setError(null);
     
+    // Create an initial query result structure
+    setCurrentQuery({
+      question,
+      documents: [],
+      answer: null,
+      structured_answer: null
+    });
+    
     try {
-      const response = await axios.post('/api/query', {
-        question,
-        num_docs: numDocs,
+      // Use fetch for streaming instead of axios
+      const response = await fetch('/api/query/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Accel-Buffering': 'no'
+        },
+        body: JSON.stringify({
+          question,
+          num_docs: numDocs
+        })
       });
       
-      // Store the current query result
-      setCurrentQuery(response.data);
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+      }
       
-      return response.data;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            
+            if (data.error) {
+              setError(data.error);
+              continue;
+            }
+            
+            switch (data.type) {
+              case 'documents':
+                // Update documents incrementally
+                setCurrentQuery(prev => ({
+                  ...prev,
+                  documents: data.data
+                }));
+                break;
+                
+              case 'highlights':
+                // Update documents with highlights
+                setCurrentQuery(prev => {
+                  // Create a map of document content to highlights
+                  const highlightMap = {};
+                  data.data.forEach(doc => {
+                    highlightMap[doc.content] = doc.highlights || [];
+                  });
+                  
+                  // Update each document with its highlights
+                  const updatedDocs = prev.documents.map(doc => ({
+                    ...doc,
+                    highlights: highlightMap[doc.content] || []
+                  }));
+                  
+                  return {
+                    ...prev,
+                    documents: updatedDocs
+                  };
+                });
+                break;
+                
+              case 'answer':
+                // Update with final answer
+                setCurrentQuery(prev => ({
+                  ...prev,
+                  answer: data.data.answer,
+                  structured_answer: data.data.structured_answer
+                }));
+                
+                if (data.done) {
+                  setIsLoading(false);
+                }
+                break;
+                
+              default:
+                console.warn('Unknown response type:', data.type);
+            }
+          } catch (parseError) {
+            console.error('Error parsing response:', parseError, line);
+          }
+        }
+      }
+      
+      return currentQuery;
     } catch (err) {
       const errorMessage = err.response?.data?.detail || err.message;
       setError(errorMessage);
@@ -99,6 +192,29 @@ export const ApiProvider = ({ children }) => {
   const resetQuery = useCallback(() => {
     setCurrentQuery(null);
   }, []);
+
+  // Force UI updates when documents change
+  useEffect(() => {
+    if (currentQuery && currentQuery.documents && currentQuery.documents.length > 0 && isLoading) {
+      // Clear any existing timeout
+      if (documentUpdateTimeoutRef.current) {
+        clearTimeout(documentUpdateTimeoutRef.current);
+      }
+      
+      // Force a UI update after a short delay
+      documentUpdateTimeoutRef.current = setTimeout(() => {
+        // This is just to trigger a re-render
+        setCurrentQuery(prev => ({...prev}));
+      }, 50);
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (documentUpdateTimeoutRef.current) {
+        clearTimeout(documentUpdateTimeoutRef.current);
+      }
+    };
+  }, [currentQuery, isLoading]);
 
   // Value object
   const value = {

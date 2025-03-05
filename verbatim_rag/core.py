@@ -83,7 +83,7 @@ class VerbatimRAG:
         if matched_template and score >= self.template_manager.threshold:
             return matched_template
         else:
-            return "Thanks for your question! Based on the documents, here are the key points: [RELEVANT_SENTENCES]"
+            return "Thanks for your question! Based on the documents, here are the key points:\n\n[RELEVANT_SENTENCES]"
 
     def _fill_template(self, template: str, facts: list[list[str]]) -> str:
         """
@@ -122,6 +122,91 @@ class VerbatimRAG:
         """
         # Step 1: Generate a template
         template = self._generate_template(question)
+
+        # Step 2: Retrieve relevant documents directly from the index
+        docs = self.index.search(question, k=self.k)
+
+        # Step 3: Extract relevant spans using the extractor
+        relevant_spans = self.extractor.extract_spans(question, docs)
+
+        # Step 4: Fill the template with the marked context
+        answer = self._fill_template(template, relevant_spans.values())
+
+        # Clean up the answer
+        if answer.startswith('"') and answer.endswith('"'):
+            answer = answer[1:-1]
+        answer = answer.replace("\\n", "\n")
+
+        # Create structured response
+        documents_with_highlights = []
+        all_citations = []
+
+        for i, doc in enumerate(docs):
+            doc_content = doc.content
+            highlights = []
+
+            if doc_content in relevant_spans and relevant_spans[doc_content]:
+                for span in relevant_spans[doc_content]:
+                    start = 0
+                    while True:
+                        start = doc_content.find(span, start)
+                        if start == -1:
+                            break
+
+                        highlight = Highlight(
+                            text=span, start=start, end=start + len(span)
+                        )
+
+                        highlights.append(highlight)
+
+                        all_citations.append(
+                            Citation(
+                                text=span,
+                                doc_index=i,
+                                highlight_index=len(highlights) - 1,
+                            )
+                        )
+
+                        start += len(span)
+
+            documents_with_highlights.append(
+                DocumentWithHighlights(content=doc_content, highlights=highlights)
+            )
+
+        structured_answer = StructuredAnswer(text=answer, citations=all_citations)
+
+        # Create the final result
+        result = QueryResponse(
+            question=question,
+            answer=answer,
+            structured_answer=structured_answer,
+            documents=documents_with_highlights,
+        )
+
+        return result
+
+    async def _generate_template_async(self, question: str) -> str:
+        """
+        Async version of _generate_template.
+
+        :param question: The user's question
+        :return: A template string with placeholders for facts
+        """
+        if self.template_manager.has_templates():
+            return self.template_manager.get_template(question)
+        else:
+            # Default template if no template manager is provided
+            return "Thanks for your question! Based on the documents, here are the key points:\n\n[RELEVANT_SENTENCES]"
+
+    async def query_async(self, question: str) -> QueryResponse:
+        """
+        Async version of query method.
+
+        :param question: The user's question
+        :return: A QueryResponse object containing the structured response
+        """
+        # Step 1: Generate a template
+        template = await self._generate_template_async(question)
 
         # Step 2: Retrieve relevant documents directly from the index
         docs = self.index.search(question, k=self.k)

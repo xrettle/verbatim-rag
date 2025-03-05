@@ -3,6 +3,8 @@ Data models for structured responses from the Verbatim RAG system.
 """
 
 from pydantic import BaseModel, Field, model_validator
+from enum import Enum
+from typing import Any
 
 
 class Highlight(BaseModel):
@@ -58,3 +60,17 @@ class QueryRequest(BaseModel):
 
     question: str
     num_docs: int = Field(default=5, ge=1)
+
+
+class StreamingResponseType(Enum):
+    DOCUMENTS = "documents"
+    HIGHLIGHTS = "highlights"
+    ANSWER = "answer"
+
+
+class StreamingResponse(BaseModel):
+    """Streaming response for progressive updates."""
+
+    type: StreamingResponseType
+    data: Any
+    done: bool = False

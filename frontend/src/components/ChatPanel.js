@@ -56,7 +56,6 @@ const ChatPanel = () => {
   const highlightColor = useColorModeValue('yellow.100', 'yellow.800');
   const selectedHighlightColor = useColorModeValue('orange.100', 'orange.800');
   const searchHighlightColor = useColorModeValue('green.100', 'green.800');
-  const citationColor = useColorModeValue('blue.100', 'blue.800');
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -295,105 +294,83 @@ const ChatPanel = () => {
                   >
                     <Box ref={answerRef} whiteSpace="pre-wrap">{currentQuery.answer}</Box>
                     
-                    {/* Source Documents */}
-                    {currentQuery.documents && currentQuery.documents.length > 0 && (
-                      <Box mt={4}>
-                        <Divider my={2} />
-                        <Text fontWeight="medium" fontSize="sm" mb={2}>
-                          Sources:
+                    {/* Relevant Sentences */}
+                    <Box mt={4}>
+                      <Divider my={2} />
+                      
+                      <Flex justify="space-between" align="center" mb={2}>
+                        <Text fontWeight="medium" fontSize="sm">
+                          Relevant Sentences:
                         </Text>
-                        <Flex wrap="wrap" gap={2} mb={4}>
-                          {currentQuery.documents.map((doc, idx) => (
-                            <Button
-                              key={idx}
-                              size="xs"
-                              variant="outline"
-                              colorScheme="brand"
-                              onClick={() => setSelectedDocId({ docIndex: idx })}
-                              isDisabled={doc.highlights.length === 0}
-                            >
-                              Document {idx + 1}
-                              {doc.highlights.length > 0 && (
-                                <Badge ml={1} colorScheme="green" variant="solid">
-                                  {doc.highlights.length}
-                                </Badge>
-                              )}
-                            </Button>
-                          ))}
+                        <Flex align="center">
+                          <Badge mr={2} colorScheme="gray" variant="subtle">
+                            {getAllHighlights().length} total highlights
+                          </Badge>
+                          <Input 
+                            size="xs" 
+                            placeholder="Search in sentences..." 
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            width="150px"
+                            mr={1}
+                          />
+                          <IconButton
+                            icon={<FaSearch />}
+                            size="xs"
+                            aria-label="Search"
+                            isDisabled={!searchText}
+                            onClick={() => setSearchText('')}
+                          />
                         </Flex>
-                        
-                        {/* Highlighted Sentences */}
-                        <Flex justify="space-between" align="center" mb={2}>
-                          <Text fontWeight="medium" fontSize="sm">
-                            Relevant Sentences:
-                          </Text>
-                          <Flex align="center">
-                            <Input 
-                              size="xs" 
-                              placeholder="Search in sentences..." 
-                              value={searchText}
-                              onChange={(e) => setSearchText(e.target.value)}
-                              width="150px"
-                              mr={1}
-                            />
-                            <IconButton
-                              icon={<FaSearch />}
-                              size="xs"
-                              aria-label="Search"
-                              isDisabled={!searchText}
-                              onClick={() => setSearchText('')}
-                            />
-                          </Flex>
-                        </Flex>
-                        
-                        <List spacing={2} maxH="300px" overflowY="auto">
-                          {getFilteredHighlights().map((highlight, idx) => {
-                            const citationIndex = getCitationIndex(highlight);
-                            return (
-                              <ListItem 
-                                key={idx}
-                                p={2}
-                                borderRadius="md"
-                                bg={highlight === selectedHighlight ? selectedHighlightColor : highlightColor}
-                                cursor="pointer"
-                                _hover={{ opacity: 0.8 }}
-                                onClick={() => handleHighlightClick(highlight)}
-                                position="relative"
-                              >
-                                <Flex>
-                                  <ListIcon as={FaQuoteRight} color="brand.500" mt={1} />
-                                  <Text fontSize="sm">{highlight.text}</Text>
-                                </Flex>
-                                <Flex justify="space-between" mt={1}>
-                                  <Text fontSize="xs" color="gray.500">
-                                    Document {highlight.docIndex + 1}
-                                  </Text>
-                                  <Flex>
-                                    {citationIndex !== -1 && (
-                                      <Tag size="sm" colorScheme="blue" mr={1}>
-                                        <TagLeftIcon as={FaLink} boxSize="10px" />
-                                        <TagLabel>[{citationIndex + 1}]</TagLabel>
-                                      </Tag>
-                                    )}
-                                    <Tooltip label="Click to see where this appears in the answer">
-                                      <Badge colorScheme="brand">Trace</Badge>
-                                    </Tooltip>
-                                  </Flex>
-                                </Flex>
-                              </ListItem>
-                            );
-                          })}
-                          
-                          {getFilteredHighlights().length === 0 && (
-                            <Box textAlign="center" py={4}>
-                              <Text fontSize="sm" color="gray.500">
-                                {searchText ? "No matching sentences found" : "No relevant sentences found"}
+                      </Flex>
+                    </Box>
+                    
+                    <List spacing={2} maxH="300px" overflowY="auto">
+                      {getFilteredHighlights().map((highlight, idx) => {
+                        const citationIndex = getCitationIndex(highlight);
+                        return (
+                          <ListItem 
+                            key={idx}
+                            p={2}
+                            borderRadius="md"
+                            bg={highlight === selectedHighlight ? selectedHighlightColor : highlightColor}
+                            cursor="pointer"
+                            _hover={{ opacity: 0.8 }}
+                            onClick={() => handleHighlightClick(highlight)}
+                            position="relative"
+                          >
+                            <Flex>
+                              <ListIcon as={FaQuoteRight} color="brand.500" mt={1} />
+                              <Text fontSize="sm">{highlight.text}</Text>
+                            </Flex>
+                            <Flex justify="space-between" mt={1}>
+                              <Text fontSize="xs" color="gray.500">
+                                Document {highlight.docIndex + 1}
                               </Text>
-                            </Box>
-                          )}
-                        </List>
-                      </Box>
-                    )}
+                              <Flex>
+                                {citationIndex !== -1 && (
+                                  <Tag size="sm" colorScheme="blue" mr={1}>
+                                    <TagLeftIcon as={FaLink} boxSize="10px" />
+                                    <TagLabel>[{citationIndex + 1}]</TagLabel>
+                                  </Tag>
+                                )}
+                                <Tooltip label="Click to see where this appears in the answer">
+                                  <Badge colorScheme="brand">Trace</Badge>
+                                </Tooltip>
+                              </Flex>
+                            </Flex>
+                          </ListItem>
+                        );
+                      })}
+                      
+                      {getFilteredHighlights().length === 0 && (
+                        <Box textAlign="center" py={4}>
+                          <Text fontSize="sm" color="gray.500">
+                            {searchText ? "No matching sentences found" : "No relevant sentences found"}
+                          </Text>
+                        </Box>
+                      )}
+                    </List>
                   </Box>
                 </Flex>
               </MotionBox>

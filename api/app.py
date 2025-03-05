@@ -4,12 +4,14 @@ FastAPI server for the Verbatim RAG system.
 
 import os
 import sys
-from contextlib import asynccontextmanager
-from pathlib import Path
+import json
 from typing import Optional
+from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
 from pydantic import BaseModel, Field
 
 if "OPENAI_API_KEY" not in os.environ:
@@ -19,11 +21,17 @@ if "OPENAI_API_KEY" not in os.environ:
 
 try:
     from verbatim_rag import (
-        QueryRequest,
-        QueryResponse,
-        TemplateManager,
         VerbatimIndex,
         VerbatimRAG,
+        TemplateManager,
+        Highlight,
+        DocumentWithHighlights,
+        Citation,
+        StructuredAnswer,
+        QueryResponse,
+        QueryRequest,
+        StreamingResponseType,
+        StreamingResponse as VerbatimStreamingResponse,
     )
 except ImportError as e:
     print(f"Error importing verbatim_rag: {e}")
@@ -203,6 +211,162 @@ async def query(request: QueryRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+
+
+@app.post("/api/query/stream")
+async def query_stream(request: QueryRequest):
+    """Process a query and stream the results in stages."""
+    global rag
+
+    if not rag:
+        raise HTTPException(
+            status_code=400,
+            detail="RAG system not initialized. Please load resources first.",
+        )
+
+    async def generate_response():
+        try:
+            # Step 1: Retrieve documents
+            rag.k = request.num_docs
+            docs = rag.index.search(request.question, k=request.num_docs)
+
+            # Create documents without highlights
+            documents_without_highlights = [
+                DocumentWithHighlights(content=doc.content, highlights=[])
+                for doc in docs
+            ]
+
+            # Send all documents in a single batch
+            yield (
+                json.dumps(
+                    {
+                        "type": "documents",
+                        "data": [
+                            doc.model_dump() for doc in documents_without_highlights
+                        ],
+                    }
+                )
+                + "\n"
+            )
+            yield "\n"  # Force flush
+
+            # Step 2: Extract relevant spans and create highlights
+            relevant_spans = rag.extractor.extract_spans(request.question, docs)
+            documents_with_highlights = []
+            all_citations = []
+
+            # Process each document to find highlights
+            for i, doc in enumerate(docs):
+                doc_content = doc.content
+                highlights = []
+
+                # Track regions that have already been highlighted to avoid duplicates
+                highlighted_regions = set()
+
+                # Find all spans in this document
+                if doc_content in relevant_spans and relevant_spans[doc_content]:
+                    # Sort spans by length (descending) to prioritize longer matches
+                    sorted_spans = sorted(
+                        relevant_spans[doc_content], key=len, reverse=True
+                    )
+
+                    for span in sorted_spans:
+                        # Find all non-overlapping occurrences of this span
+                        start = 0
+                        while True:
+                            start = doc_content.find(span, start)
+                            if start == -1:
+                                break
+
+                            # Check if this region overlaps with an already highlighted region
+                            end = start + len(span)
+                            overlap = False
+
+                            for region_start, region_end in highlighted_regions:
+                                # Check for any kind of overlap
+                                if start <= region_end and end >= region_start:
+                                    overlap = True
+                                    break
+
+                            if not overlap:
+                                # Create a highlight for this non-overlapping region
+                                highlight = Highlight(text=span, start=start, end=end)
+                                highlights.append(highlight)
+
+                                # Add to tracked regions
+                                highlighted_regions.add((start, end))
+
+                                # Create a citation
+                                all_citations.append(
+                                    Citation(
+                                        text=span,
+                                        doc_index=i,
+                                        highlight_index=len(highlights) - 1,
+                                    )
+                                )
+
+                            # Move past this occurrence
+                            start = end
+
+                # Add document with its highlights
+                documents_with_highlights.append(
+                    DocumentWithHighlights(content=doc_content, highlights=highlights)
+                )
+
+            # Send documents with highlights
+            yield (
+                json.dumps(
+                    {
+                        "type": "highlights",
+                        "data": [doc.model_dump() for doc in documents_with_highlights],
+                    }
+                )
+                + "\n"
+            )
+            yield "\n"  # Force flush
+
+            # Step 3: Generate answer
+            template = rag._generate_template(request.question)
+            answer = rag._fill_template(template, relevant_spans.values())
+
+            # Clean up the answer
+            if answer.startswith('"') and answer.endswith('"'):
+                answer = answer[1:-1]
+            answer = answer.replace("\\n", "\n")
+
+            # Create structured answer with citations
+            structured_answer = StructuredAnswer(text=answer, citations=all_citations)
+
+            # Create the final result
+            result = QueryResponse(
+                question=request.question,
+                answer=answer,
+                structured_answer=structured_answer,
+                documents=documents_with_highlights,
+            )
+
+            # Send final answer
+            yield (
+                json.dumps(
+                    {"type": "answer", "data": result.model_dump(), "done": True}
+                )
+                + "\n"
+            )
+
+        except Exception as e:
+            yield json.dumps({"error": str(e), "type": "error", "done": True}) + "\n"
+
+    # Return streaming response with headers to prevent buffering
+    return FastAPIStreamingResponse(
+        generate_response(),
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Type": "application/x-ndjson",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # Prevents nginx buffering
+            "Transfer-Encoding": "chunked",  # Force chunked encoding
+        },
+    )
 
 
 if __name__ == "__main__":
