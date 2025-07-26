@@ -119,14 +119,16 @@ from verbatim_rag.index import VerbatimIndex
 from verbatim_rag.extractors import ModelSpanExtractor
 
 # Load your trained extractor
-extractor = ModelSpanExtractor("path/to/your/model")
+extractor = ModelSpanExtractor("KRLabsOrg/verbatim-rag-modern-bert-v1")
 
-# Create VerbatimRAG system with custom extractor
+# Load the index
+# (Assuming you have already created and populated the index)
 index = VerbatimIndex(
     sparse_model="naver/splade-v3", 
     db_path="./index.db"
 )
 
+# Create VerbatimRAG system with custom extractor
 rag_system = VerbatimRAG(
     index=index,
     extractor=extractor,
@@ -137,7 +139,6 @@ rag_system = VerbatimRAG(
 response = rag_system.query("Main findings of the paper?")
 print(response.answer)
 ```
-
 
 ## Citation
 
