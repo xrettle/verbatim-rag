@@ -5,13 +5,10 @@ Core implementation of the Verbatim RAG system.
 from verbatim_rag.extractors import LLMSpanExtractor, SpanExtractor
 from verbatim_rag.index import VerbatimIndex
 from verbatim_rag.models import (
-    Citation,
-    DocumentWithHighlights,
-    Highlight,
     QueryResponse,
-    StructuredAnswer,
 )
 from verbatim_rag.template_manager import TemplateManager
+from verbatim_rag.response_builder import ResponseBuilder
 
 MARKING_SYSTEM_PROMPT = """
 You are a Q&A text extraction system. Your task is to identify and mark EXACT verbatim text spans from the provided document that is relevant to answer the user's question.
@@ -70,6 +67,7 @@ class VerbatimRAG:
         # Use provided components or create defaults
         self.template_manager = template_manager or TemplateManager()
         self.extractor = extractor or LLMSpanExtractor(model=model)
+        self.response_builder = ResponseBuilder()
 
     def _generate_template(self, question: str) -> str:
         """
@@ -78,12 +76,7 @@ class VerbatimRAG:
         :param question: The user's question
         :return: A template string with placeholders for facts
         """
-        matched_template, score = self.template_manager.match_template(question)
-
-        if matched_template and score >= self.template_manager.threshold:
-            return matched_template
-        else:
-            return "Thanks for your question! Based on the documents, here are the key points:\n\n[RELEVANT_SENTENCES]"
+        return self.template_manager.get_template(question)
 
     def _fill_template(self, template: str, facts: list[list[str]]) -> str:
         """
@@ -117,73 +110,30 @@ class VerbatimRAG:
         Process a query through the Verbatim RAG system.
 
         :param question: The user's question
-
         :return: A QueryResponse object containing the structured response
         """
         # Step 1: Generate a template
         template = self._generate_template(question)
 
-        # Step 2: Retrieve relevant documents directly from the index
-        docs = self.index.search(question, k=self.k)
+        # Step 2: Retrieve relevant search results from the index
+        search_results = self.index.search(question, k=self.k)
 
         # Step 3: Extract relevant spans using the extractor
-        relevant_spans = self.extractor.extract_spans(question, docs)
+        relevant_spans = self.extractor.extract_spans(question, search_results)
 
-        # Step 4: Fill the template with the marked context
+        # Step 5: Fill the template with the marked context
         answer = self._fill_template(template, relevant_spans.values())
 
-        # Clean up the answer
-        if answer.startswith('"') and answer.endswith('"'):
-            answer = answer[1:-1]
-        answer = answer.replace("\\n", "\n")
+        # Step 6: Clean up the answer
+        answer = self.response_builder.clean_answer(answer)
 
-        # Create structured response
-        documents_with_highlights = []
-        all_citations = []
-
-        for i, doc in enumerate(docs):
-            doc_content = doc.content
-            highlights = []
-
-            if doc_content in relevant_spans and relevant_spans[doc_content]:
-                for span in relevant_spans[doc_content]:
-                    start = 0
-                    while True:
-                        start = doc_content.find(span, start)
-                        if start == -1:
-                            break
-
-                        highlight = Highlight(
-                            text=span, start=start, end=start + len(span)
-                        )
-
-                        highlights.append(highlight)
-
-                        all_citations.append(
-                            Citation(
-                                text=span,
-                                doc_index=i,
-                                highlight_index=len(highlights) - 1,
-                            )
-                        )
-
-                        start += len(span)
-
-            documents_with_highlights.append(
-                DocumentWithHighlights(content=doc_content, highlights=highlights)
-            )
-
-        structured_answer = StructuredAnswer(text=answer, citations=all_citations)
-
-        # Create the final result
-        result = QueryResponse(
+        # Step 7: Build the complete response using the response builder
+        return self.response_builder.build_response(
             question=question,
             answer=answer,
-            structured_answer=structured_answer,
-            documents=documents_with_highlights,
+            search_results=search_results,
+            relevant_spans=relevant_spans,
         )
-
-        return result
 
     async def _generate_template_async(self, question: str) -> str:
         """
@@ -192,11 +142,7 @@ class VerbatimRAG:
         :param question: The user's question
         :return: A template string with placeholders for facts
         """
-        if self.template_manager.has_templates():
-            return self.template_manager.get_template(question)
-        else:
-            # Default template if no template manager is provided
-            return "Thanks for your question! Based on the documents, here are the key points:\n\n[RELEVANT_SENTENCES]"
+        return self.template_manager.get_template(question)
 
     async def query_async(self, question: str) -> QueryResponse:
         """
@@ -208,64 +154,22 @@ class VerbatimRAG:
         # Step 1: Generate a template
         template = await self._generate_template_async(question)
 
-        # Step 2: Retrieve relevant documents directly from the index
-        docs = self.index.search(question, k=self.k)
+        # Step 2: Retrieve relevant search results from the index
+        search_results = self.index.search(question, k=self.k)
 
         # Step 3: Extract relevant spans using the extractor
-        relevant_spans = self.extractor.extract_spans(question, docs)
+        relevant_spans = self.extractor.extract_spans(question, search_results)
 
-        # Step 4: Fill the template with the marked context
+        # Step 5: Fill the template with the marked context
         answer = self._fill_template(template, relevant_spans.values())
 
-        # Clean up the answer
-        if answer.startswith('"') and answer.endswith('"'):
-            answer = answer[1:-1]
-        answer = answer.replace("\\n", "\n")
+        # Step 6: Clean up the answer
+        answer = self.response_builder.clean_answer(answer)
 
-        # Create structured response
-        documents_with_highlights = []
-        all_citations = []
-
-        for i, doc in enumerate(docs):
-            doc_content = doc.content
-            highlights = []
-
-            if doc_content in relevant_spans and relevant_spans[doc_content]:
-                for span in relevant_spans[doc_content]:
-                    start = 0
-                    while True:
-                        start = doc_content.find(span, start)
-                        if start == -1:
-                            break
-
-                        highlight = Highlight(
-                            text=span, start=start, end=start + len(span)
-                        )
-
-                        highlights.append(highlight)
-
-                        all_citations.append(
-                            Citation(
-                                text=span,
-                                doc_index=i,
-                                highlight_index=len(highlights) - 1,
-                            )
-                        )
-
-                        start += len(span)
-
-            documents_with_highlights.append(
-                DocumentWithHighlights(content=doc_content, highlights=highlights)
-            )
-
-        structured_answer = StructuredAnswer(text=answer, citations=all_citations)
-
-        # Create the final result
-        result = QueryResponse(
+        # Step 7: Build the complete response using the response builder
+        return self.response_builder.build_response(
             question=question,
             answer=answer,
-            structured_answer=structured_answer,
-            documents=documents_with_highlights,
+            search_results=search_results,
+            relevant_spans=relevant_spans,
         )
-
-        return result
