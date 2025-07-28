@@ -16,15 +16,17 @@ def main():
         processor.process_url(
             url="https://aclanthology.org/2025.bionlp-share.8.pdf",
             title="KR Labs at ArchEHR-QA 2025: A Verbatim Approach for Evidence-Based Question Answering",
-            metadata={"authors": ["Adam Kovacs", "Paul Schmitt", "Gabor Recski"]}
+            metadata={"authors": ["Adam Kovacs", "Paul Schmitt", "Gabor Recski"]},
         )
     ]
     print(f"Processed {len(documents)} documents.")
-    
+
     # Step 2: Create RAG system
     print("\n🔍 Creating RAG system...")
     index = VerbatimIndex(
-        dense_model=None, sparse_model="naver/splade-v3", db_path="./index.db"
+        dense_model=None,
+        sparse_model="opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill",
+        db_path="./index.db",
     )
     index.add_documents(documents)
 

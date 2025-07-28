@@ -1,6 +1,16 @@
 # Verbatim RAG
 
+<p align="center">
+  <img src="https://github.com/KRLabsOrg/verbatim-rag/blob/main/assets/chiliground.png?raw=true" alt="ChiliGround Logo" width="400"/>
+  <br><em>Chill, I Ground! 🌶 ️</em>
+</p>
+
 A minimalistic approach to Retrieval-Augmented Generation (RAG) that prevents hallucination by ensuring all generated content is explicitly derived from source documents.
+
+[![PyPI](https://img.shields.io/pypi/v/verbatim-rag)](https://pypi.org/project/verbatim-rag/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1Ubca5aMaBGdHtJ1rpqj3Ke9SLEr-PaDn?usp=sharing)
+[![ACL 2025](https://img.shields.io/badge/ACL%20Anthology-2025.bionlp--share.8-blue)](https://aclanthology.org/2025.bionlp-share.8/)
 
 ## Concept
 
