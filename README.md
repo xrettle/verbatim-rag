@@ -47,7 +47,7 @@ document = processor.process_url(
 
 # Define SPLADE index with a sparse model
 index = VerbatimIndex(
-    sparse_model="naver/splade-v3", 
+    sparse_model="opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill",
     db_path="./index.db"
 )
 index.add_documents([document])
@@ -134,7 +134,7 @@ extractor = ModelSpanExtractor("KRLabsOrg/verbatim-rag-modern-bert-v1")
 # Load the index
 # (Assuming you have already created and populated the index)
 index = VerbatimIndex(
-    sparse_model="naver/splade-v3", 
+    sparse_model="opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill",
     db_path="./index.db"
 )
 
