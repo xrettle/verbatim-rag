@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,8 @@ class SearchResult:
     id: str
     score: float
     metadata: Dict[str, Any]
-    text: str
+    text: str  # Original clean text for display
+    enhanced_text: str = ""  # Enhanced text used for vectorization
 
 
 class VectorStore(ABC):
@@ -30,21 +32,23 @@ class VectorStore(ABC):
         dense_vectors: Optional[List[List[float]]],
         sparse_vectors: Optional[List[Dict[int, float]]],
         texts: List[str],
+        enhanced_texts: List[str],
         metadatas: List[Dict[str, Any]],
     ):
-        """Add vectors with metadata and text."""
+        """Add vectors with metadata, original text, and enhanced text."""
         pass
 
     @abstractmethod
-    def search(
+    def query(
         self,
         dense_query: Optional[List[float]] = None,
         sparse_query: Optional[Dict[int, float]] = None,
         text_query: Optional[str] = None,
         top_k: int = 5,
         search_type: str = "hybrid",
+        filter: Optional[str] = None,
     ) -> List[SearchResult]:
-        """Search for similar vectors using hybrid search."""
+        """Query for similar vectors using hybrid search."""
         pass
 
     @abstractmethod
@@ -120,18 +124,13 @@ class LocalMilvusStore(VectorStore):
                     enable_analyzer=True,
                 )
                 schema.add_field(
-                    field_name="document_id", datatype=DataType.VARCHAR, max_length=100
+                    field_name="enhanced_text",
+                    datatype=DataType.VARCHAR,
+                    max_length=65535,
+                    enable_analyzer=True,
                 )
-                schema.add_field(
-                    field_name="title", datatype=DataType.VARCHAR, max_length=512
-                )
-                schema.add_field(
-                    field_name="source", datatype=DataType.VARCHAR, max_length=512
-                )
-                schema.add_field(
-                    field_name="chunk_type", datatype=DataType.VARCHAR, max_length=50
-                )
-                schema.add_field(field_name="page_number", datatype=DataType.INT64)
+                # Single JSON field for all metadata
+                schema.add_field(field_name="metadata", datatype=DataType.JSON)
 
                 # Create collection
                 self.client.create_collection(
@@ -217,6 +216,7 @@ class LocalMilvusStore(VectorStore):
         dense_vectors: Optional[List[List[float]]],
         sparse_vectors: Optional[List[Dict[int, float]]],
         texts: List[str],
+        enhanced_texts: List[str],
         metadatas: List[Dict[str, Any]],
     ):
         """Add vectors with metadata and text."""
@@ -228,16 +228,32 @@ class LocalMilvusStore(VectorStore):
             raise ValueError("Sparse vectors required but not provided")
 
         # Prepare data for Milvus with conditional vectors
+        from datetime import datetime
+        from enum import Enum
+
+        def json_serialize_safe(obj):
+            """Safely serialize objects to JSON, handling datetime and enum objects."""
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, Enum):
+                return obj.value  # Convert enum to its string value
+            elif isinstance(obj, dict):
+                return {k: json_serialize_safe(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [json_serialize_safe(item) for item in obj]
+            else:
+                return obj
+
         data = []
         for i in range(len(ids)):
+            # Serialize all metadata - ensure all values are JSON-serializable
+            safe_metadata = json_serialize_safe(metadatas[i])
+
             item = {
                 "id": ids[i],
-                "text": texts[i],
-                "document_id": metadatas[i].get("document_id", ""),
-                "title": metadatas[i].get("title", ""),  # Keep for search display
-                "source": metadatas[i].get("source", ""),  # Keep for search display
-                "chunk_type": metadatas[i].get("chunk_type", ""),
-                "page_number": metadatas[i].get("page_number", 0),
+                "text": texts[i],  # Original clean text
+                "enhanced_text": enhanced_texts[i],  # Enhanced text for vectorization
+                "metadata": safe_metadata,
             }
 
             # Add vectors only for fields that exist in the schema
@@ -257,15 +273,52 @@ class LocalMilvusStore(VectorStore):
         """Add document metadata to the documents collection."""
 
         # Prepare document data (no chunks, just metadata)
+        import json
+        from datetime import datetime
+        from enum import Enum
+
+        def json_serialize_safe(obj):
+            """Safely serialize objects to JSON, handling datetime and enum objects."""
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, Enum):
+                return obj.value  # Convert enum to its string value
+            elif isinstance(obj, dict):
+                return {k: json_serialize_safe(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [json_serialize_safe(item) for item in obj]
+            else:
+                return obj
+
         doc_data = []
         for doc in documents:
+            metadata = doc.get("metadata", {})
+            if isinstance(metadata, dict):
+                # Handle datetime objects in metadata, but keep as dict (not JSON string)
+                safe_metadata = json_serialize_safe(metadata)
+            elif isinstance(metadata, str):
+                # If it's already a string, try to parse it back to dict for consistency
+                try:
+                    safe_metadata = json.loads(metadata)
+                except:
+                    safe_metadata = {
+                        "raw": metadata
+                    }  # Fallback for invalid JSON strings
+            else:
+                # Convert other types to dict format
+                safe_metadata = json_serialize_safe(metadata) if metadata else {}
+
             item = {
-                "id": doc["id"],
-                "title": doc["title"],
-                "source": doc["source"],
-                "content_type": doc["content_type"],
-                "raw_content": doc["raw_content"],
-                "metadata": doc["metadata"],
+                "id": doc.get("id", ""),
+                "title": doc.get("title") or "",  # Convert None to empty string
+                "source": doc.get("source") or "",  # Convert None to empty string
+                "content_type": doc.get("doc_type")
+                or doc.get("content_type")
+                or "",  # Handle None values
+                "raw_content": doc.get(
+                    "raw_content", ""
+                ),  # This should be empty for schema-based docs
+                "metadata": safe_metadata,  # Store as dict, not JSON string
             }
             doc_data.append(item)
 
@@ -275,6 +328,18 @@ class LocalMilvusStore(VectorStore):
         )
 
         logger.info(f"Added {len(doc_data)} documents to Milvus")
+
+    def add_document_schema(self, document_dict: Dict[str, Any], doc_id: str = None):
+        """
+        Add a single document using the new schema system.
+
+        :param document_dict: Document dict from DocumentSchema.to_storage_dict()
+        :param doc_id: Optional document ID override
+        """
+        if doc_id:
+            document_dict["id"] = doc_id
+
+        self.add_documents([document_dict])
 
     def get_document(self, document_id: str) -> Dict[str, Any]:
         """Retrieve document metadata by ID."""
@@ -297,23 +362,25 @@ class LocalMilvusStore(VectorStore):
         else:
             return None
 
-    def search(
+    def query(
         self,
         dense_query: Optional[List[float]] = None,
         sparse_query: Optional[Dict[int, float]] = None,
         text_query: Optional[str] = None,
         top_k: int = 5,
         search_type: str = "dense",
+        filter: Optional[str] = None,
     ) -> List[SearchResult]:
-        """Search using dense, sparse, or hybrid vectors."""
+        """Query using vector search or filter-only browsing."""
+
+        # If no vectors provided, do filter-only query
+        if not dense_query and not sparse_query:
+            return self._filter_only_query(filter, top_k)
 
         output_fields = [
             "text",
-            "document_id",
-            "title",
-            "source",
-            "chunk_type",
-            "page_number",
+            "enhanced_text",
+            "metadata",
         ]
 
         if search_type == "dense" and dense_query:
@@ -324,6 +391,7 @@ class LocalMilvusStore(VectorStore):
                 anns_field="dense_vector",
                 limit=top_k,
                 output_fields=output_fields,
+                filter=filter,
             )
 
         elif search_type == "sparse" and sparse_query:
@@ -334,18 +402,53 @@ class LocalMilvusStore(VectorStore):
                 anns_field="sparse_vector",
                 limit=top_k,
                 output_fields=output_fields,
+                filter=filter,
             )
 
         elif search_type == "hybrid" and dense_query and sparse_query:
-            # For now, fall back to dense search as hybrid search has API issues
-            # TODO: Fix hybrid search implementation
-            results = self.client.search(
-                collection_name=self.collection_name,
-                data=[dense_query],
-                anns_field="dense_vector",
-                limit=top_k,
-                output_fields=output_fields,
-            )
+            # Hybrid search: combine dense and sparse results
+            # Note: Milvus doesn't have native hybrid search, so we implement it
+            # by combining results from both dense and sparse searches
+            try:
+                # Perform dense search
+                dense_results = self.client.search(
+                    collection_name=self.collection_name,
+                    data=[dense_query],
+                    anns_field="dense_vector",
+                    limit=top_k * 2,  # Get more results for merging
+                    output_fields=output_fields,
+                    filter=filter,
+                )
+
+                # Perform sparse search
+                sparse_results = self.client.search(
+                    collection_name=self.collection_name,
+                    data=[sparse_query],
+                    anns_field="sparse_vector",
+                    limit=top_k * 2,  # Get more results for merging
+                    output_fields=output_fields,
+                    filter=filter,
+                )
+
+                # Combine results using reciprocal rank fusion (RRF)
+                results = self._merge_hybrid_results(
+                    dense_results[0], sparse_results[0], top_k, alpha=0.5
+                )
+                results = [results]  # Wrap in list to match expected format
+
+            except Exception as e:
+                logger.warning(
+                    f"Hybrid search failed: {e}, falling back to dense search"
+                )
+                # Fallback to dense search
+                results = self.client.search(
+                    collection_name=self.collection_name,
+                    data=[dense_query],
+                    anns_field="dense_vector",
+                    limit=top_k,
+                    output_fields=output_fields,
+                    filter=filter,
+                )
 
         else:
             raise ValueError(
@@ -355,22 +458,133 @@ class LocalMilvusStore(VectorStore):
         # Convert results
         search_results = []
         for hit in results[0]:
+            entity = hit.get("entity", {})
+
+            # Get metadata from single JSON field
+            metadata = entity.get("metadata", {})
+            # Handle both dict and JSON string cases
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except Exception:
+                    metadata = {"raw": metadata}
+
             search_results.append(
                 SearchResult(
                     id=hit.get("id"),
                     score=hit.get("distance", 0.0),
-                    text=hit.get("entity", {}).get("text", ""),
-                    metadata={
-                        "document_id": hit.get("entity", {}).get("document_id", ""),
-                        "title": hit.get("entity", {}).get("title", ""),
-                        "source": hit.get("entity", {}).get("source", ""),
-                        "chunk_type": hit.get("entity", {}).get("chunk_type", ""),
-                        "page_number": hit.get("entity", {}).get("page_number", 0),
-                    },
+                    text=entity.get("text", ""),
+                    enhanced_text=entity.get("enhanced_text", ""),
+                    metadata=metadata,
                 )
             )
 
         return search_results
+
+    def _filter_only_query(
+        self, filter: Optional[str], limit: int
+    ) -> List[SearchResult]:
+        """Query without vector search - just filtering/browsing."""
+        try:
+            results = self.client.query(
+                collection_name=self.collection_name,
+                filter=filter or "",  # Empty filter gets all
+                output_fields=["id", "text", "enhanced_text", "metadata"],
+                limit=limit,
+            )
+
+            # Convert to SearchResult format
+            search_results = []
+            for result in results:
+                metadata = result.get("metadata", {})
+                # Handle both dict and JSON string cases
+                if isinstance(metadata, str):
+                    try:
+                        metadata = json.loads(metadata)
+                    except Exception:
+                        metadata = {"raw": metadata}
+
+                search_results.append(
+                    SearchResult(
+                        id=result.get("id", ""),
+                        score=1.0,  # No relevance score for filter-only queries
+                        text=result.get("text", ""),
+                        enhanced_text=result.get("enhanced_text", ""),
+                        metadata=metadata,
+                    )
+                )
+
+            return search_results
+
+        except Exception as e:
+            logger.error(f"Failed to query chunks: {e}")
+            return []
+
+    def _merge_hybrid_results(
+        self, dense_hits, sparse_hits, top_k: int, alpha: float = 0.5
+    ):
+        """
+        Merge dense and sparse search results using reciprocal rank fusion (RRF).
+
+        :param dense_hits: Results from dense vector search
+        :param sparse_hits: Results from sparse vector search
+        :param top_k: Number of final results to return
+        :param alpha: Weight for combining scores (0.5 = equal weight)
+        :return: Merged results list
+        """
+        # Create score maps based on ranking
+        dense_scores = {}
+        sparse_scores = {}
+        all_ids = set()
+
+        # Process dense results
+        for rank, hit in enumerate(dense_hits):
+            hit_id = hit.get("id")
+            if hit_id:
+                # RRF score: 1 / (rank + 1)
+                dense_scores[hit_id] = 1.0 / (rank + 1)
+                all_ids.add(hit_id)
+
+        # Process sparse results
+        for rank, hit in enumerate(sparse_hits):
+            hit_id = hit.get("id")
+            if hit_id:
+                sparse_scores[hit_id] = 1.0 / (rank + 1)
+                all_ids.add(hit_id)
+
+        # Combine scores and create merged results
+        merged_results = []
+        hit_map = {}
+
+        # Create hit map for easy lookup
+        for hit in dense_hits:
+            hit_id = hit.get("id")
+            if hit_id:
+                hit_map[hit_id] = hit
+
+        for hit in sparse_hits:
+            hit_id = hit.get("id")
+            if hit_id and hit_id not in hit_map:
+                hit_map[hit_id] = hit
+
+        # Calculate combined scores and create results
+        for hit_id in all_ids:
+            dense_score = dense_scores.get(hit_id, 0.0)
+            sparse_score = sparse_scores.get(hit_id, 0.0)
+
+            # Weighted combination of RRF scores
+            combined_score = alpha * dense_score + (1 - alpha) * sparse_score
+
+            if hit_id in hit_map:
+                hit = hit_map[hit_id].copy()
+                hit["distance"] = (
+                    1.0 - combined_score
+                )  # Convert back to distance (lower is better)
+                merged_results.append(hit)
+
+        # Sort by combined score (higher is better) and return top_k
+        merged_results.sort(key=lambda x: 1.0 - x.get("distance", 1.0), reverse=True)
+        return merged_results[:top_k]
 
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """Get all documents stored in the documents collection"""
@@ -508,6 +722,7 @@ class CloudMilvusStore(VectorStore):
         dense_vectors: List[List[float]],
         sparse_vectors: List[Dict[int, float]],
         texts: List[str],
+        enhanced_texts: List[str],
         metadatas: List[Dict[str, Any]],
     ):
         """Add vectors with metadata and text."""
@@ -533,15 +748,16 @@ class CloudMilvusStore(VectorStore):
         self.collection.insert(data)
         self.collection.flush()
 
-    def search(
+    def query(
         self,
         dense_query: Optional[List[float]] = None,
         sparse_query: Optional[Dict[int, float]] = None,
         text_query: Optional[str] = None,
         top_k: int = 5,
         search_type: str = "hybrid",
+        filter: Optional[str] = None,
     ) -> List[SearchResult]:
-        """Search using hybrid dense + sparse vectors."""
+        """Query using hybrid dense + sparse vectors."""
 
         self.collection.load()
 

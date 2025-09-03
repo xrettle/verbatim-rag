@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "verbatim-rag"
-version = "0.1.1"
+version = "0.1.2"
 description = "A minimalistic RAG system that prevents hallucination by ensuring all generated content is explicitly derived from source documents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -78,6 +78,7 @@ all = [
 
 [project.scripts]
 verbatim-rag = "verbatim_rag.cli:main"
+verbatim-enhance = "verbatim_core.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["verbatim_rag"] 
+packages = ["verbatim_rag", "verbatim_core"]

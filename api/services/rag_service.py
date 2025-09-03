@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 from verbatim_rag.core import VerbatimRAG
-from verbatim_rag.template_manager import TemplateManager
+from verbatim_core.templates import TemplateManager
 from verbatim_rag import QueryResponse
 
 logger = logging.getLogger(__name__)
@@ -43,9 +43,7 @@ class APIService:
     ) -> QueryResponse:
         """Execute an async query through the RAG system"""
         try:
-            # For now, just call the sync version
-            # In the future, this could be implemented with async RAG processing
-            response = self.rag.query(question)
+            response = await self.rag.query_async(question)
             return response
         except Exception as e:
             logger.error(f"Async query execution failed: {e}")
@@ -54,7 +52,8 @@ class APIService:
     def get_templates(self) -> list:
         """Get available templates"""
         try:
-            return self.template_manager.list_templates()
+            modes = self.template_manager.get_available_modes()
+            return [{"mode": m} for m in modes]
         except Exception as e:
             logger.error(f"Failed to get templates: {e}")
             raise

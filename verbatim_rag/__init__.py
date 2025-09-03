@@ -20,8 +20,13 @@ from verbatim_rag.models import (
     StructuredAnswer,
 )
 from verbatim_rag.streaming import StreamingRAG
-from verbatim_rag.template_manager import TemplateManager
+from verbatim_rag.templates import TemplateManager
 from verbatim_rag.verbatim_doc import VerbatimDOC, VerbatimRAGAdapter
+from verbatim_rag.schema import DocumentSchema
+from verbatim_rag.transform import VerbatimTransform
+from verbatim_rag.transform import verbatim_query, verbatim_query_async
+from verbatim_rag.providers import RAGProvider, IndexProvider, VerbatimRAGProvider
+from verbatim_rag.universal_document import UniversalDocument
 
 # Optional ingestion module (requires docling + chonkie)
 try:
