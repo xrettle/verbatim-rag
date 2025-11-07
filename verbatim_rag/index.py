@@ -474,6 +474,7 @@ class VerbatimIndex:
         k: int = 5,
         search_type: str = "auto",
         filter: Optional[str] = None,
+        search_params: Optional[Dict[str, Any]] = None,
     ) -> List[SearchResult]:
         """
         Query for documents using vector search or filtering.
@@ -483,6 +484,7 @@ class VerbatimIndex:
             k: Number of documents to retrieve
             search_type: Type of search ("dense", "sparse", "hybrid", "auto")
             filter: Optional Milvus filter expression for metadata filtering
+            search_params: Optional dict of search parameters (e.g., {"nprobe": 128} for IVF indexes)
 
         Returns:
             List of SearchResult objects
@@ -495,6 +497,7 @@ class VerbatimIndex:
                 text_query=None,
                 top_k=k,
                 filter=filter,
+                search_params=search_params,
             )
 
         # Auto-detect search type based on available providers
@@ -526,6 +529,7 @@ class VerbatimIndex:
             top_k=k,
             search_type=search_type,
             filter=filter,
+            search_params=search_params,
         )
 
     def get_document(self, document_id: str) -> Optional[Dict[str, Any]]:
