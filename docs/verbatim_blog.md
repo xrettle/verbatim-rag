@@ -44,6 +44,13 @@ The result: every number, every fact, every claim in the response is directly tr
 
 ## Quickstart: Zero Hallucinations in 15 Lines
 
+Install the required dependencies:
+```bash
+!pip install verbatim-rag
+```
+
+Then create a Verbatim RAG system:
+
 ```python
 from verbatim_rag import VerbatimRAG, VerbatimIndex
 from verbatim_rag.vector_stores import LocalMilvusStore
@@ -85,6 +92,12 @@ print(response.answer)
 
 A key integration pattern: wrap your existing LangChain/LlamaIndex retrieval with Verbatim's extraction layer. Your indexing pipeline stays unchanged, you're only adding the verbatim extraction step on top of your existing retrieval.
 
+Install the required dependencies:
+```bash
+!pip install langchain langchain-openai langchain-community openai faiss-cpu langchain-text-splitters
+```
+
+Then wrap your existing LangChain RAG system:
 ```python
 from verbatim_rag.providers import RAGProvider
 from verbatim_rag import verbatim_query
@@ -301,7 +314,7 @@ rag = VerbatimRAG(index, extractor=extractor)
 
 ## Template Management
 
-Template management controls how extracted spans are composed into final responses. Two modes are available:
+Template management controls how extracted spans are composed into final responses. Three modes are available:
 
 ### 1. **Static Mode** - Fixed Format
 
@@ -329,8 +342,6 @@ The `[RELEVANT_SENTENCES]` placeholder is automatically replaced with numbered c
 
 **Use cases:** Compliance-required formatting, API responses with fixed schemas, systems where output format must be predictable.
 
-Static mode can be used per question as well, generating a different template for the first ~100 questions, then only finding the best suited template for the subsequent queries (e.g. using embedding similarity to the question to find the best suited template).
-
 ---
 
 ### 2. **Dynamic Mode** - Adaptive Formatting (Default)
@@ -349,6 +360,41 @@ response = rag.query("What were the results?")
 
 **Use cases:** Conversational interfaces, chatbots, systems where natural language flow matters more than format consistency.
 
+### 3. Question-Specific Mode - Template Matching
+
+Sometimes you want different response formats for different question types, without the randomness. Define templates paired with example questions—the system automatically selects the best-fitting template using semantic similarity:
+
+```python
+templates = [
+    {
+        "template": "**Methodology:**\n\n[RELEVANT_SENTENCES]\n\n*Methods extracted from source*",
+        "examples": [
+            "What methods were used?",
+            "How was this done?",
+            "Describe the methodology"
+        ]
+    },
+    {
+        "template": "**Key Findings:**\n\n[RELEVANT_SENTENCES]\n\n*Results from source*",
+        "examples": [
+            "What were the results?",
+            "What did they find?",
+            "What are the key findings?"
+        ]
+    }
+]
+
+rag.template_manager.use_question_specific_mode(templates)
+
+# Questions automatically matched to appropriate templates
+response = rag.query("How did they approach this?")
+# Uses Methodology template
+
+response = rag.query("What were the main findings?")
+# Uses Key Findings template
+```
+
+The system embeds all example questions once and matches incoming queries using cosine similarity—no LLM call needed.
 
 ---
 
@@ -456,13 +502,6 @@ Verbatim RAG trades generation flexibility for factual precision. Use it when:
 **Hybrid approach**: Use Verbatim RAG for factual queries and traditional RAG for analytical/synthesis queries, routing based on query type.
 
 ---
-
-## Installation
-
-### Install
-```bash
-pip install verbatim-rag
-```
 
 ### Resources
 - [Tutorial Notebook](https://github.com/KRLabsOrg/verbatim-rag/blob/main/docs/build_verbatim.ipynb) - Complete guide with examples
