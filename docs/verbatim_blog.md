@@ -183,7 +183,7 @@ The LLM approximated "60k" to "58,000" during token generation—not because ret
 
 This happens because:
 1. **Token-level generation** doesn't preserve exact numerals from context
-2. **Training data** contains many approximate phrasings (\"around X\", \"approximately Y\")
+2. **Token prediction objective** learns probability distributions over paraphrases, not verbatim copying mechanisms
 3. **Autoregressive sampling** can drift from source text even with high context attention
 
 Traditional RAG systems try to mitigate this through better prompting, retrieval, or reranking. But these don't address the root cause: the model is generating new tokens rather than selecting existing ones.
