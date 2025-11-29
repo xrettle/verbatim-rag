@@ -2,6 +2,8 @@
 Unified index class for the Verbatim RAG system.
 """
 
+import logging
+
 from typing import List, Optional, Dict, Any, Union, Tuple
 from tqdm import tqdm
 from verbatim_rag.document import Document
@@ -175,9 +177,14 @@ class VerbatimIndex:
         Returns:
             Text with document metadata appended
         """
-        parts = [text, "", "---"]
+        parts = []
+        if doc.title:
+            parts.append(f"# {doc.title}\n\n")
+
+        parts += [text, "", "---"]
         parts.append(f"Document: {doc.title or 'Unknown'}")
-        parts.append(f"Source: {doc.source or 'Unknown'}")
+        if doc.source:
+            parts.append(f"Source: {doc.source or 'Unknown'}")
 
         # Add custom metadata (skip sensitive fields)
         if doc.metadata:
@@ -389,7 +396,9 @@ class VerbatimIndex:
             chunks_list.append(chunk)
 
         # Step 3: Generate embeddings for all enhanced texts
+        logging.debug("generating embeddings...")
         dense_embeddings, sparse_embeddings = self._generate_embeddings(enhanced_texts)
+        logging.debug("DONE generating embeddings.")
 
         # Step 4: Prepare metadata for each chunk
         metadatas = [self._prepare_chunk_metadata(doc, chunk) for chunk in chunks_list]
@@ -652,9 +661,11 @@ class VerbatimIndex:
             "sample_chunks": [
                 {
                     "id": chunk.id,
-                    "text_preview": chunk.text[:100] + "..."
-                    if len(chunk.text) > 100
-                    else chunk.text,
+                    "text_preview": (
+                        chunk.text[:100] + "..."
+                        if len(chunk.text) > 100
+                        else chunk.text
+                    ),
                     "document_id": chunk.metadata.get("document_id"),
                     "chunk_number": chunk.metadata.get("chunk_number"),
                 }
