@@ -11,6 +11,154 @@ import json
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_hybrid_weights(hybrid_weights: Dict[str, float]) -> Dict[str, float]:
+    """Validate and filter hybrid weight config."""
+    if not hybrid_weights:
+        raise ValueError("hybrid_weights must be a non-empty dict")
+
+    allowed_methods = {"dense", "sparse", "full_text"}
+    cleaned: Dict[str, float] = {}
+
+    for method, weight in hybrid_weights.items():
+        if method not in allowed_methods:
+            logger.warning("Ignoring unsupported hybrid method '%s'", method)
+            continue
+        if not isinstance(weight, (int, float)) or weight <= 0:
+            logger.warning(
+                "Ignoring non-positive weight for method '%s': %s", method, weight
+            )
+            continue
+        cleaned[method] = float(weight)
+
+    if not cleaned:
+        raise ValueError("No valid hybrid_weights after validation")
+
+    return cleaned
+
+
+def _normalize_weights(
+    results_by_method: Dict[str, List], weights: Dict[str, float]
+) -> Dict[str, float]:
+    available_weights = {m: weights.get(m, 0.0) for m in results_by_method}
+    total_weight = sum(available_weights.values())
+    if total_weight == 0:
+        logger.warning(
+            "No non-zero weights for available methods; using equal weights "
+            f"for: {list(results_by_method.keys())}"
+        )
+        return {k: 1.0 / len(results_by_method) for k in results_by_method}
+    return {k: v / total_weight for k, v in available_weights.items()}
+
+
+def _merge_hybrid_results(
+    results_by_method: Dict[str, List],
+    top_k: int,
+    weights: Dict[str, float],
+    rrf_k: int = 60,
+    log_label: str = "",
+):
+    """Merge search results from multiple methods using weighted RRF."""
+    normalized_weights = _normalize_weights(results_by_method, weights)
+
+    if log_label:
+        logger.info(
+            "Hybrid merge (%s): methods=%s normalized_weights=%s rrf_k=%s top_k=%s",
+            log_label,
+            list(results_by_method.keys()),
+            normalized_weights,
+            rrf_k,
+            top_k,
+        )
+
+    scores_by_id = {}
+    hit_map = {}
+
+    for method_name, results in results_by_method.items():
+        weight = normalized_weights.get(method_name, 0.0)
+        for rank, hit in enumerate(results):
+            hit_id = hit.get("id")
+            if not hit_id:
+                continue
+            rrf_score = 1.0 / (rrf_k + rank + 1)
+            weighted_score = weight * rrf_score
+
+            if hit_id not in scores_by_id:
+                scores_by_id[hit_id] = 0.0
+                hit_map[hit_id] = hit
+            scores_by_id[hit_id] += weighted_score
+
+    sorted_ids = sorted(
+        scores_by_id.keys(), key=lambda id: scores_by_id[id], reverse=True
+    )
+    merged_results = []
+    for hit_id in sorted_ids[:top_k]:
+        hit = hit_map[hit_id].copy()
+        hit["distance"] = 1.0 - scores_by_id[hit_id]
+        merged_results.append(hit)
+
+    return merged_results
+
+
+def _convert_hits_to_results(
+    hits: List,
+    dynamic_fields: Optional[List[str]] = None,
+) -> List["SearchResult"]:
+    """Convert raw hits to SearchResult objects."""
+    if dynamic_fields is None:
+        dynamic_fields = []
+
+    search_results: List[SearchResult] = []
+    for hit in hits:
+        entity = hit.get("entity", {})
+        metadata = entity.get("metadata", {}) or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except Exception:
+                metadata = {"raw": metadata}
+
+        for f in dynamic_fields:
+            val = entity.get(f)
+            if val is not None:
+                metadata[f] = val
+
+        search_results.append(
+            SearchResult(
+                id=hit.get("id"),
+                score=hit.get("distance", 0.0),
+                text=entity.get("text", ""),
+                enhanced_text=entity.get("enhanced_text", ""),
+                metadata=metadata,
+            )
+        )
+    return search_results
+
+
+def _sanitize_hybrid_weights(hybrid_weights: Dict[str, float]) -> Dict[str, float]:
+    """Validate and filter hybrid weight config."""
+    if not hybrid_weights:
+        raise ValueError("hybrid_weights must be a non-empty dict")
+
+    allowed_methods = {"dense", "sparse", "full_text"}
+    cleaned: Dict[str, float] = {}
+
+    for method, weight in hybrid_weights.items():
+        if method not in allowed_methods:
+            logger.warning("Ignoring unsupported hybrid method '%s'", method)
+            continue
+        if not isinstance(weight, (int, float)) or weight <= 0:
+            logger.warning(
+                "Ignoring non-positive weight for method '%s': %s", method, weight
+            )
+            continue
+        cleaned[method] = float(weight)
+
+    if not cleaned:
+        raise ValueError("No valid hybrid_weights after validation")
+
+    return cleaned
+
+
 @dataclass
 class SearchResult:
     """Result from vector search."""
@@ -67,6 +215,7 @@ class LocalMilvusStore(VectorStore):
         dense_dim: int = 384,
         enable_dense: bool = True,
         enable_sparse: bool = True,
+        enable_full_text: bool = False,  # Milvus Lite doesn't support BM25
         index_type: str = "IVF_FLAT",
         nlist: int = 8192,
     ):
@@ -76,6 +225,17 @@ class LocalMilvusStore(VectorStore):
         self.dense_dim = dense_dim
         self.enable_dense = enable_dense
         self.enable_sparse = enable_sparse
+        # Milvus Lite does not support BM25 full text search
+        # This feature is only available in Milvus Standalone/Distributed/Cloud
+        if enable_full_text:
+            logger.warning(
+                "Full text search (BM25) is not supported in Milvus Lite. "
+                "This feature requires Milvus Standalone, Distributed, or Zilliz Cloud. "
+                "Full text search will be disabled."
+            )
+            self.enable_full_text = False
+        else:
+            self.enable_full_text = False
         self.index_type = index_type
         self.nlist = nlist
 
@@ -136,6 +296,16 @@ class LocalMilvusStore(VectorStore):
                 # Single JSON field for all metadata
                 schema.add_field(field_name="metadata", datatype=DataType.JSON)
 
+                # Note: BM25 full text search is NOT supported in Milvus Lite
+                # This feature is only available in Milvus Standalone/Distributed/Cloud
+                # If enable_full_text is True, it will be disabled with a warning in __init__
+                if self.enable_full_text:
+                    logger.warning(
+                        "Attempting to enable full text search in Milvus Lite, "
+                        "but this feature is not supported. Skipping BM25 setup."
+                    )
+                    self.enable_full_text = False
+
                 # Create collection
                 self.client.create_collection(
                     collection_name=self.collection_name, schema=schema
@@ -161,6 +331,8 @@ class LocalMilvusStore(VectorStore):
                         metric_type="IP",
                         params={"inverted_index_algo": "DAAT_MAXSCORE"},
                     )
+
+                # Note: BM25 index not created for Milvus Lite (not supported)
 
                 self.client.create_index(
                     collection_name=self.collection_name, index_params=index_params
@@ -373,12 +545,41 @@ class LocalMilvusStore(VectorStore):
         search_type: str = "dense",
         filter: Optional[str] = None,
         search_params: Optional[Dict[str, Any]] = None,
+        hybrid_weights: Optional[Dict[str, float]] = None,
+        rrf_k: int = 60,
     ) -> List[SearchResult]:
-        """Query using vector search or filter-only browsing.
+        """Query using vector search, full text search, or filter-only browsing.
 
         Args:
+            dense_query: Optional dense vector query
+            sparse_query: Optional sparse vector query
+            text_query: Optional text query for full text search (BM25)
+            top_k: Number of results to return
+            search_type: Type of search ("dense", "sparse", "hybrid", "full_text", "auto")
+            filter: Optional filter expression
             search_params: Optional dict of search parameters (e.g., {"nprobe": 128} for IVF indexes)
+            hybrid_weights: Optional dict of weights for hybrid search
+                          e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2}
+                          If provided, overrides search_type and enables N-way hybrid search
+            rrf_k: RRF constant for hybrid search (default 60)
         """
+
+        # If hybrid_weights provided, use N-way hybrid search
+        if hybrid_weights is not None:
+            return self._hybrid_search_with_weights(
+                dense_query,
+                sparse_query,
+                text_query,
+                top_k,
+                filter,
+                search_params,
+                hybrid_weights,
+                rrf_k,
+            )
+
+        # Full text search using BM25
+        if search_type == "full_text" and text_query and self.enable_full_text:
+            return self._full_text_search(text_query, top_k, filter)
 
         # If no vectors provided, do filter-only query
         if not dense_query and not sparse_query:
@@ -442,10 +643,18 @@ class LocalMilvusStore(VectorStore):
                 )
 
                 # Combine results using reciprocal rank fusion (RRF)
-                results = self._merge_hybrid_results(
-                    dense_results[0], sparse_results[0], top_k, alpha=0.5
+                results_by_method = {
+                    "dense": dense_results[0],
+                    "sparse": sparse_results[0],
+                }
+                merged = _merge_hybrid_results(
+                    results_by_method,
+                    top_k,
+                    {"dense": 0.5, "sparse": 0.5},
+                    rrf_k=rrf_k,
+                    log_label="LocalMilvus",
                 )
-                results = [results]  # Wrap in list to match expected format
+                results = [merged]  # Wrap in list to match expected format
 
             except Exception as e:
                 logger.warning(
@@ -467,31 +676,7 @@ class LocalMilvusStore(VectorStore):
                 f"Invalid search configuration: type={search_type}, dense={dense_query is not None}, sparse={sparse_query is not None}"
             )
 
-        # Convert results
-        search_results = []
-        for hit in results[0]:
-            entity = hit.get("entity", {})
-
-            # Get metadata from single JSON field
-            metadata = entity.get("metadata", {})
-            # Handle both dict and JSON string cases
-            if isinstance(metadata, str):
-                try:
-                    metadata = json.loads(metadata)
-                except Exception:
-                    metadata = {"raw": metadata}
-
-            search_results.append(
-                SearchResult(
-                    id=hit.get("id"),
-                    score=hit.get("distance", 0.0),
-                    text=entity.get("text", ""),
-                    enhanced_text=entity.get("enhanced_text", ""),
-                    metadata=metadata,
-                )
-            )
-
-        return search_results
+        return _convert_hits_to_results(results[0])
 
     def _filter_only_query(
         self, filter: Optional[str], limit: int
@@ -532,71 +717,167 @@ class LocalMilvusStore(VectorStore):
             logger.error(f"Failed to query chunks: {e}")
             return []
 
-    def _merge_hybrid_results(
-        self, dense_hits, sparse_hits, top_k: int, alpha: float = 0.5
-    ):
+    def _full_text_search(
+        self, text_query: str, top_k: int, filter: Optional[str] = None
+    ) -> List[SearchResult]:
         """
-        Merge dense and sparse search results using reciprocal rank fusion (RRF).
+        Perform full text search using BM25.
 
-        :param dense_hits: Results from dense vector search
-        :param sparse_hits: Results from sparse vector search
-        :param top_k: Number of final results to return
-        :param alpha: Weight for combining scores (0.5 = equal weight)
-        :return: Merged results list
+        Args:
+            text_query: Natural language text query
+            top_k: Number of results to return
+            filter: Optional filter expression
+
+        Returns:
+            List of SearchResult objects
         """
-        # Create score maps based on ranking
-        dense_scores = {}
-        sparse_scores = {}
-        all_ids = set()
+        if not self.enable_full_text:
+            raise ValueError("Full text search is not enabled for this collection")
 
-        # Process dense results
-        for rank, hit in enumerate(dense_hits):
-            hit_id = hit.get("id")
-            if hit_id:
-                # RRF score: 1 / (rank + 1)
-                dense_scores[hit_id] = 1.0 / (rank + 1)
-                all_ids.add(hit_id)
+        try:
+            # Use Milvus search with text query - it will automatically convert to BM25
+            results = self.client.search(
+                collection_name=self.collection_name,
+                data=[text_query],  # Pass text directly - Milvus converts to BM25
+                anns_field="bm25_vector",
+                limit=top_k,
+                output_fields=["text", "enhanced_text", "metadata"],
+                filter=filter,
+            )
 
-        # Process sparse results
-        for rank, hit in enumerate(sparse_hits):
-            hit_id = hit.get("id")
-            if hit_id:
-                sparse_scores[hit_id] = 1.0 / (rank + 1)
-                all_ids.add(hit_id)
+            # Convert results
+            search_results = []
+            for hit in results[0]:
+                entity = hit.get("entity", {})
+                metadata = entity.get("metadata", {})
+                if isinstance(metadata, str):
+                    try:
+                        metadata = json.loads(metadata)
+                    except Exception:
+                        metadata = {"raw": metadata}
 
-        # Combine scores and create merged results
-        merged_results = []
-        hit_map = {}
+                search_results.append(
+                    SearchResult(
+                        id=hit.get("id"),
+                        score=hit.get("distance", 0.0),
+                        text=entity.get("text", ""),
+                        enhanced_text=entity.get("enhanced_text", ""),
+                        metadata=metadata,
+                    )
+                )
 
-        # Create hit map for easy lookup
-        for hit in dense_hits:
-            hit_id = hit.get("id")
-            if hit_id:
-                hit_map[hit_id] = hit
+            return search_results
 
-        for hit in sparse_hits:
-            hit_id = hit.get("id")
-            if hit_id and hit_id not in hit_map:
-                hit_map[hit_id] = hit
+        except Exception as e:
+            logger.error(f"Full text search failed: {e}")
+            return []
 
-        # Calculate combined scores and create results
-        for hit_id in all_ids:
-            dense_score = dense_scores.get(hit_id, 0.0)
-            sparse_score = sparse_scores.get(hit_id, 0.0)
+    def _hybrid_search_with_weights(
+        self,
+        dense_query: Optional[List[float]],
+        sparse_query: Optional[Dict[int, float]],
+        text_query: Optional[str],
+        top_k: int,
+        filter: Optional[str],
+        search_params: Optional[Dict[str, Any]],
+        hybrid_weights: Dict[str, float],
+        rrf_k: int,
+    ) -> List[SearchResult]:
+        """Execute N-way hybrid search with custom weights.
 
-            # Weighted combination of RRF scores
-            combined_score = alpha * dense_score + (1 - alpha) * sparse_score
+        Args:
+            dense_query: Dense vector query
+            sparse_query: Sparse vector query
+            text_query: Text query for full-text search
+            top_k: Number of results
+            filter: Optional filter
+            search_params: Optional search parameters
+            hybrid_weights: Dict of weights for each method
+            rrf_k: RRF constant
 
-            if hit_id in hit_map:
-                hit = hit_map[hit_id].copy()
-                hit["distance"] = (
-                    1.0 - combined_score
-                )  # Convert back to distance (lower is better)
-                merged_results.append(hit)
+        Returns:
+            List of SearchResult objects
+        """
+        hybrid_weights = _sanitize_hybrid_weights(hybrid_weights)
 
-        # Sort by combined score (higher is better) and return top_k
-        merged_results.sort(key=lambda x: 1.0 - x.get("distance", 1.0), reverse=True)
-        return merged_results[:top_k]
+        # Warn if full_text requested but not available
+        if "full_text" in hybrid_weights and not self.enable_full_text:
+            logger.warning(
+                "full_text not available on LocalMilvus (only Standalone/Cloud), "
+                "removing from hybrid_weights"
+            )
+            hybrid_weights = {
+                k: v for k, v in hybrid_weights.items() if k != "full_text"
+            }
+
+        if not hybrid_weights:
+            raise ValueError("No valid search methods in hybrid_weights")
+
+        output_fields = ["text", "enhanced_text", "metadata"]
+        results_by_method = {}
+
+        # Execute each search method
+        if "dense" in hybrid_weights and dense_query is not None:
+            dense_results = self.client.search(
+                collection_name=self.collection_name,
+                data=[dense_query],
+                anns_field="dense_vector",
+                limit=top_k * 2,  # Fetch more for better merging
+                output_fields=output_fields,
+                filter=filter,
+                search_params=search_params,
+            )
+            results_by_method["dense"] = dense_results[0]
+
+        if "sparse" in hybrid_weights and sparse_query is not None:
+            sparse_results = self.client.search(
+                collection_name=self.collection_name,
+                data=[sparse_query],
+                anns_field="sparse_vector",
+                limit=top_k * 2,
+                output_fields=output_fields,
+                filter=filter,
+                search_params=search_params,
+            )
+            results_by_method["sparse"] = sparse_results[0]
+
+        if (
+            "full_text" in hybrid_weights
+            and text_query is not None
+            and self.enable_full_text
+        ):
+            # Note: LocalMilvus doesn't support full_text, but keeping for consistency
+            # This code path won't be reached due to the warning above
+            pass
+
+        # Handle single method or empty results
+        if len(results_by_method) == 0:
+            logger.warning("Hybrid search: no valid methods executed after validation")
+            return []
+        elif len(results_by_method) == 1:
+            # Single method, just convert and return top_k
+            method_results = list(results_by_method.values())[0]
+            logger.info(
+                "Hybrid search (LocalMilvus): methods=%s weights=%s rrf_k=%s top_k=%s",
+                list(results_by_method.keys()),
+                hybrid_weights,
+                rrf_k,
+                top_k,
+            )
+            return _convert_hits_to_results(method_results[:top_k])
+
+        # Multiple methods: merge with RRF
+        logger.info(
+            "Hybrid search (LocalMilvus): methods=%s weights=%s rrf_k=%s top_k=%s",
+            list(results_by_method.keys()),
+            hybrid_weights,
+            rrf_k,
+            top_k,
+        )
+        merged_hits = _merge_hybrid_results(
+            results_by_method, top_k, hybrid_weights, rrf_k, log_label="LocalMilvus"
+        )
+        return _convert_hits_to_results(merged_hits)
 
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """Get all documents stored in the documents collection"""
@@ -642,6 +923,7 @@ class CloudMilvusStore(VectorStore):
         token: Optional[str] = None,
         enable_dense: bool = True,
         enable_sparse: bool = True,
+        enable_full_text: bool = True,
         index_type: str = "IVF_FLAT",
         nlist: int = 8192,
     ):
@@ -653,13 +935,15 @@ class CloudMilvusStore(VectorStore):
         self.token = token
         self.enable_dense = enable_dense
         self.enable_sparse = enable_sparse
+        # Full text search IS supported in Cloud Milvus (Standalone/Distributed/Cloud)
+        self.enable_full_text = enable_full_text
         self.index_type = index_type
         self.nlist = nlist
 
         # Validate at least one embedding type is enabled
-        if not enable_dense and not enable_sparse:
+        if not enable_dense and not enable_sparse and not enable_full_text:
             raise ValueError(
-                "At least one of enable_dense or enable_sparse must be True"
+                "At least one of enable_dense, enable_sparse, or enable_full_text must be True"
             )
 
         self._setup_milvus()
@@ -715,6 +999,32 @@ class CloudMilvusStore(VectorStore):
                 )
                 schema.add_field(field_name="metadata", datatype=DataType.JSON)
 
+                # Add BM25 function for full text search if enabled
+                if self.enable_full_text:
+                    try:
+                        from pymilvus import Function, FunctionType
+
+                        # Add BM25 sparse vector field
+                        schema.add_field(
+                            field_name="bm25_vector",
+                            datatype=DataType.SPARSE_FLOAT_VECTOR,
+                        )
+
+                        # Add BM25 function to automatically convert text to sparse vectors
+                        bm25_function = Function(
+                            name="text_bm25_emb",
+                            input_field_names=["text"],
+                            output_field_names=["bm25_vector"],
+                            function_type=FunctionType.BM25,
+                        )
+                        schema.add_function(bm25_function)
+                    except ImportError:
+                        logger.warning(
+                            "BM25 function not available. Full text search will be disabled. "
+                            "Ensure you have a compatible version of pymilvus."
+                        )
+                        self.enable_full_text = False
+
                 self.client.create_collection(
                     collection_name=self.collection_name, schema=schema
                 )
@@ -734,9 +1044,35 @@ class CloudMilvusStore(VectorStore):
                         metric_type="IP",
                         params={"inverted_index_algo": "DAAT_MAXSCORE"},
                     )
+                if self.enable_full_text:
+                    # BM25 sparse vector index for full text search
+                    try:
+                        index_params.add_index(
+                            field_name="bm25_vector",
+                            index_type="SPARSE_INVERTED_INDEX",
+                            metric_type="BM25",
+                            params={
+                                "inverted_index_algo": "DAAT_MAXSCORE",
+                                "bm25_k1": 1.2,
+                                "bm25_b": 0.75,
+                            },
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to create BM25 index: {e}. Full text search may not work."
+                        )
+                        self.enable_full_text = False
                 self.client.create_index(
                     collection_name=self.collection_name, index_params=index_params
                 )
+                # Ensure collection is loaded once after index creation
+                try:
+                    self.client.load_collection(collection_name=self.collection_name)
+                    logger.info(f"Loaded collection: {self.collection_name}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to load collection {self.collection_name}: {e}"
+                    )
                 logger.info(f"Created cloud Milvus collection: {self.collection_name}")
 
             # Create documents collection (include dummy vector to satisfy cloud constraint)
@@ -787,6 +1123,18 @@ class CloudMilvusStore(VectorStore):
                     collection_name=self.documents_collection_name,
                     index_params=doc_index_params,
                 )
+                # Load the documents collection into memory
+                try:
+                    self.client.load_collection(
+                        collection_name=self.documents_collection_name
+                    )
+                    logger.info(
+                        f"Loaded documents collection: {self.documents_collection_name}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to load documents collection {self.documents_collection_name}: {e}"
+                    )
                 logger.info(
                     f"Created cloud Milvus documents collection: {self.documents_collection_name}"
                 )
@@ -798,63 +1146,6 @@ class CloudMilvusStore(VectorStore):
 
     def _collection_exists(self) -> bool:
         return self.client.has_collection(self.collection_name)
-
-    def _create_collection(self):
-        from pymilvus import DataType
-
-        schema = self.client.create_schema(auto_id=False, enable_dynamic_field=True)
-        schema.add_field(
-            field_name="id", datatype=DataType.VARCHAR, is_primary=True, max_length=100
-        )
-        if self.enable_dense:
-            schema.add_field(
-                field_name="dense_vector",
-                datatype=DataType.FLOAT_VECTOR,
-                dim=self.dense_dim,
-            )
-        if self.enable_sparse:
-            schema.add_field(
-                field_name="sparse_vector", datatype=DataType.SPARSE_FLOAT_VECTOR
-            )
-        schema.add_field(
-            field_name="text",
-            datatype=DataType.VARCHAR,
-            max_length=65535,
-            enable_analyzer=True,
-        )
-        schema.add_field(
-            field_name="enhanced_text",
-            datatype=DataType.VARCHAR,
-            max_length=65535,
-            enable_analyzer=True,
-        )
-        schema.add_field(field_name="metadata", datatype=DataType.JSON)
-
-        self.client.create_collection(
-            collection_name=self.collection_name, schema=schema
-        )
-
-        index_params = self.client.prepare_index_params()
-        if self.enable_dense:
-            index_params.add_index(
-                field_name="dense_vector",
-                index_type="IVF_FLAT",
-                metric_type="COSINE",
-                params={"nlist": 1024},
-            )
-        if self.enable_sparse:
-            index_params.add_index(
-                field_name="sparse_vector",
-                index_type="SPARSE_INVERTED_INDEX",
-                metric_type="IP",
-                params={"inverted_index_algo": "DAAT_MAXSCORE"},
-            )
-        self.client.create_index(
-            collection_name=self.collection_name, index_params=index_params
-        )
-        logger.info(
-            f"Created cloud Milvus collection with dynamic fields: {self.collection_name}"
-        )
 
     def _create_documents_collection(self):
         from pymilvus import DataType
@@ -1013,12 +1304,39 @@ class CloudMilvusStore(VectorStore):
         search_type: str = "hybrid",
         filter: Optional[str] = None,
         search_params: Optional[Dict[str, Any]] = None,
+        hybrid_weights: Optional[Dict[str, float]] = None,
+        rrf_k: int = 60,
     ) -> List[SearchResult]:
-        """Query using hybrid dense + sparse vectors or filter-only browsing.
+        """Query using hybrid dense + sparse vectors, full text search, or filter-only browsing.
 
         Args:
+            dense_query: Optional dense vector query
+            sparse_query: Optional sparse vector query
+            text_query: Optional text query for full text search (BM25)
+            top_k: Number of results to return
+            search_type: Type of search ("dense", "sparse", "hybrid", "full_text", "auto")
+            filter: Optional filter expression
             search_params: Optional dict of search parameters (e.g., {"nprobe": 128} for IVF indexes)
+            hybrid_weights: Optional dict mapping method names to weights (e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2})
+            rrf_k: RRF constant for hybrid search (default: 60)
         """
+
+        # NEW: If hybrid_weights provided, use N-way hybrid search
+        if hybrid_weights is not None:
+            return self._hybrid_search_with_weights(
+                dense_query,
+                sparse_query,
+                text_query,
+                top_k,
+                filter,
+                search_params,
+                hybrid_weights,
+                rrf_k,
+            )
+
+        # LEGACY: Full text search using BM25
+        if search_type == "full_text" and text_query and self.enable_full_text:
+            return self._full_text_search(text_query, top_k, filter)
 
         # Request fields; include promoted dynamic fields
         dynamic_fields = ["user_id", "document_id", "dataset_id"]
@@ -1103,8 +1421,17 @@ class CloudMilvusStore(VectorStore):
                     filter=filter,
                     search_params=search_params,
                 )
-                merged = self._merge_hybrid_results(
-                    dense_results[0], sparse_results[0], top_k, alpha=0.5
+                # Use new N-way merge signature with 50/50 weights (equivalent to alpha=0.5)
+                results_by_method = {
+                    "dense": dense_results[0],
+                    "sparse": sparse_results[0],
+                }
+                merged = _merge_hybrid_results(
+                    results_by_method,
+                    top_k,
+                    {"dense": 0.5, "sparse": 0.5},
+                    rrf_k,
+                    log_label="CloudMilvus",
                 )
                 results = [merged]
             except Exception as e:
@@ -1122,31 +1449,155 @@ class CloudMilvusStore(VectorStore):
         else:
             raise ValueError(f"Invalid search configuration: type={search_type}")
 
-        # Convert results
-        search_results = []
-        for hit in results[0]:
-            entity = hit.get("entity", {})
-            md = entity.get("metadata", {}) or {}
-            if isinstance(md, str):
+        return _convert_hits_to_results(results[0], dynamic_fields)
+
+    def _hybrid_search_with_weights(
+        self,
+        dense_query: Optional[List[float]],
+        sparse_query: Optional[Dict[int, float]],
+        text_query: Optional[str],
+        top_k: int,
+        filter: Optional[str],
+        search_params: Optional[Dict[str, Any]],
+        hybrid_weights: Dict[str, float],
+        rrf_k: int,
+    ) -> List[SearchResult]:
+        """
+        Execute N-way hybrid search using weighted RRF combination.
+
+        Args:
+            dense_query: Dense vector query
+            sparse_query: Sparse vector query
+            text_query: Text query for BM25 full text search
+            top_k: Number of results to return
+            filter: Optional filter expression
+            search_params: Optional search parameters
+            hybrid_weights: Dict mapping method names to weights (e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2})
+            rrf_k: RRF constant
+
+        Returns:
+            List of SearchResult objects
+        """
+        hybrid_weights = _sanitize_hybrid_weights(hybrid_weights)
+
+        # Request fields; include promoted dynamic fields
+        dynamic_fields = ["user_id", "document_id", "dataset_id"]
+        output_fields = ["text", "enhanced_text", "metadata", *dynamic_fields]
+
+        # Execute searches for each method in hybrid_weights
+        results_by_method = {}
+
+        if "dense" in hybrid_weights and dense_query is not None:
+            logger.info("Executing dense search for hybrid")
+            dense_results = self.client.search(
+                collection_name=self.collection_name,
+                data=[dense_query],
+                anns_field="dense_vector",
+                limit=top_k * 2,  # Fetch more for better merging
+                output_fields=output_fields,
+                filter=filter,
+                search_params=search_params,
+            )
+            results_by_method["dense"] = dense_results[0]
+
+        if "sparse" in hybrid_weights and sparse_query is not None:
+            logger.info("Executing sparse search for hybrid")
+            sparse_results = self.client.search(
+                collection_name=self.collection_name,
+                data=[sparse_query],
+                anns_field="sparse_vector",
+                limit=top_k * 2,
+                output_fields=output_fields,
+                filter=filter,
+                search_params=search_params,
+            )
+            results_by_method["sparse"] = sparse_results[0]
+
+        if "full_text" in hybrid_weights and text_query is not None:
+            if self.enable_full_text:
+                logger.info("Executing full text (BM25) search for hybrid")
                 try:
-                    md = json.loads(md)
-                except Exception:
-                    md = {"raw": md}
-            for f in dynamic_fields:
-                val = entity.get(f)
-                if val is not None:
-                    md[f] = val
-            search_results.append(
-                SearchResult(
-                    id=hit.get("id"),
-                    score=hit.get("distance", 0.0),
-                    text=entity.get("text", ""),
-                    enhanced_text=entity.get("enhanced_text", ""),
-                    metadata=md,
+                    full_text_results = self.client.search(
+                        collection_name=self.collection_name,
+                        data=[text_query],
+                        anns_field="bm25_vector",
+                        limit=top_k * 2,
+                        output_fields=output_fields,
+                        filter=filter,
+                    )
+                    results_by_method["full_text"] = full_text_results[0]
+                except Exception as e:
+                    logger.warning(
+                        f"Full text search failed: {e}, excluding from hybrid"
+                    )
+            else:
+                logger.warning(
+                    "full_text requested but not enabled for this collection, excluding from hybrid"
                 )
+                # Remove full_text from weights
+                hybrid_weights = {
+                    k: v for k, v in hybrid_weights.items() if k != "full_text"
+                }
+
+        # Handle results
+        if len(results_by_method) == 0:
+            logger.warning("No valid search methods available for hybrid search")
+            return []
+        elif len(results_by_method) == 1:
+            # Only one method available, just take top_k
+            method_results = list(results_by_method.values())[0]
+            logger.info(
+                "Hybrid search (CloudMilvus): methods=%s weights=%s rrf_k=%s top_k=%s",
+                list(results_by_method.keys()),
+                hybrid_weights,
+                rrf_k,
+                top_k,
+            )
+            merged_hits = method_results[:top_k]
+        else:
+            # Multiple methods - merge using N-way RRF
+            logger.info(f"Merging {len(results_by_method)} search methods using RRF")
+            merged_hits = _merge_hybrid_results(
+                results_by_method, top_k, hybrid_weights, rrf_k, log_label="CloudMilvus"
             )
 
-        return search_results
+        # Convert to SearchResult objects
+        return _convert_hits_to_results(merged_hits, dynamic_fields)
+
+    def _full_text_search(
+        self, text_query: str, top_k: int, filter: Optional[str] = None
+    ) -> List[SearchResult]:
+        """
+        Perform full text search using BM25.
+
+        Args:
+            text_query: Natural language text query
+            top_k: Number of results to return
+            filter: Optional filter expression
+
+        Returns:
+            List of SearchResult objects
+        """
+        if not self.enable_full_text:
+            raise ValueError("Full text search is not enabled for this collection")
+
+        try:
+            dynamic_fields = ["user_id", "document_id", "dataset_id"]
+            output_fields = ["text", "enhanced_text", "metadata", *dynamic_fields]
+
+            results = self.client.search(
+                collection_name=self.collection_name,
+                data=[text_query],
+                anns_field="bm25_vector",
+                limit=top_k,
+                output_fields=output_fields,
+                filter=filter,
+            )
+
+            return _convert_hits_to_results(results[0], dynamic_fields)
+        except Exception as e:
+            logger.error(f"Full text search failed: {e}")
+            return []
 
     def delete(self, ids: List[str]):
         if not ids:

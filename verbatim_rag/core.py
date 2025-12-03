@@ -150,16 +150,33 @@ class VerbatimRAG:
             template, display_spans, citation_spans
         )
 
-    def query(self, question: str, filter: Optional[str] = None) -> QueryResponse:
+    def query(
+        self,
+        question: str,
+        k: Optional[int] = None,
+        filter: Optional[str] = None,
+        hybrid_weights: Optional[dict[str, float]] = None,
+        rrf_k: int = 60,
+    ) -> QueryResponse:
         """
         Process a query through the Verbatim RAG system.
 
         :param question: The user's question
+        :param k: Number of documents to retrieve (uses self.k if not provided)
         :param filter: Optional filter to narrow document search
+        :param hybrid_weights: Optional dict mapping method names to weights (e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2})
+        :param rrf_k: RRF constant for hybrid search (default: 60)
         :return: A QueryResponse object containing the structured response
         """
         # Step 1: Retrieve documents
-        search_results = self.index.query(text=question, k=self.k, filter=filter)
+        k = k or self.k
+        search_results = self.index.query(
+            text=question,
+            k=k,
+            filter=filter,
+            hybrid_weights=hybrid_weights,
+            rrf_k=rrf_k,
+        )
 
         # Step 2: Check mode and extract accordingly
         if self.template_manager.current_mode == "structured":
@@ -223,17 +240,32 @@ class VerbatimRAG:
         return answer, relevant_spans
 
     async def query_async(
-        self, question: str, filter: Optional[str] = None
+        self,
+        question: str,
+        k: Optional[int] = None,
+        filter: Optional[str] = None,
+        hybrid_weights: Optional[dict[str, float]] = None,
+        rrf_k: int = 60,
     ) -> QueryResponse:
         """
         Async version of query method.
 
         :param question: The user's question
+        :param k: Number of documents to retrieve (uses self.k if not provided)
         :param filter: Optional filter to narrow document search
+        :param hybrid_weights: Optional dict mapping method names to weights (e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2})
+        :param rrf_k: RRF constant for hybrid search (default: 60)
         :return: A QueryResponse object containing the structured response
         """
         # Step 1: Retrieve documents
-        search_results = self.index.query(text=question, k=self.k, filter=filter)
+        k = k or self.k
+        search_results = self.index.query(
+            text=question,
+            k=k,
+            filter=filter,
+            hybrid_weights=hybrid_weights,
+            rrf_k=rrf_k,
+        )
 
         # Step 2: Check mode and extract accordingly
         if self.template_manager.current_mode == "structured":
