@@ -18,7 +18,7 @@ from .hybrid_search import (
 logger = logging.getLogger(__name__)
 
 # Milvus VARCHAR field limit (slightly under 65535 to be safe)
-MAX_TEXT_LENGTH = 65000
+MAX_TEXT_LENGTH = 60000
 
 
 class BaseMilvusStore(VectorStore):
