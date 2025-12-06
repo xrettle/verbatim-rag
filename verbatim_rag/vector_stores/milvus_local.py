@@ -94,13 +94,13 @@ class LocalMilvusStore(BaseMilvusStore):
                 schema.add_field(
                     field_name="text",
                     datatype=DataType.VARCHAR,
-                    max_length=128000,
+                    max_length=65535,
                     enable_analyzer=True,
                 )
                 schema.add_field(
                     field_name="enhanced_text",
                     datatype=DataType.VARCHAR,
-                    max_length=128000,
+                    max_length=65535,
                     enable_analyzer=True,
                 )
                 schema.add_field(field_name="metadata", datatype=DataType.JSON)
