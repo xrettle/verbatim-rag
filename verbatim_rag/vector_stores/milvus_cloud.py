@@ -76,7 +76,7 @@ class CloudMilvusStore(BaseMilvusStore):
                     field_name="id",
                     datatype=DataType.VARCHAR,
                     is_primary=True,
-                    max_length=100,
+                    max_length=512,
                 )
 
                 if self.enable_dense:
