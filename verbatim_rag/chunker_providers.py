@@ -71,9 +71,8 @@ class MarkdownChunkerProvider(ChunkerProvider):
         self.max_chunk_size = max_chunk_size
 
         # Precompile regex patterns for protected regions
-        self.table_pattern = re.compile(
-            r"\|.*?\n\|[-: ]+\|.*?\n(?:\|.*?\n)*", re.MULTILINE
-        )
+        # Table pattern: contiguous lines starting with |
+        self.table_pattern = re.compile(r"(?:^[ ]*\|.+\n)+", re.MULTILINE)
         self.code_pattern = re.compile(r"```[a-zA-Z0-9+\-_]*\n.*?\n```", re.DOTALL)
 
     def chunk(self, text: str) -> List[Tuple[str, str]]:
@@ -230,12 +229,53 @@ class MarkdownChunkerProvider(ChunkerProvider):
         return start, end
 
     def _find_protected_regions(self, text: str) -> List[Tuple[int, int]]:
-        """Find positions of tables and code blocks that should not be split."""
+        """Find positions of tables (with captions) and code blocks that should not be split."""
         protected = []
 
-        # Find all tables
+        # Pattern for table captions: "Table N:" or "Table N." at start of line
+        caption_pattern = re.compile(r"^[ ]*Table\s+\d+[:\.].*$", re.MULTILINE)
+
+        # First, find all tables and captions
+        tables = []
         for match in self.table_pattern.finditer(text):
-            protected.append((match.start(), match.end()))
+            block = match.group()
+            if re.search(r"\|[-:\s]+\|", block):
+                tables.append((match.start(), match.end()))
+
+        captions = [(m.start(), m.end()) for m in caption_pattern.finditer(text)]
+
+        # For each table, find its caption (before or after, whichever is closer)
+        for table_start, table_end in tables:
+            region_start = table_start
+            region_end = table_end
+
+            # Check for caption BEFORE table
+            for cap_start, cap_end in captions:
+                if cap_end <= table_start:
+                    between = text[cap_end:table_start]
+                    if between.strip() == "":
+                        # Check no other table between caption and this table
+                        other_table_between = any(
+                            cap_end < t_start < table_start for t_start, t_end in tables
+                        )
+                        if not other_table_between:
+                            region_start = cap_start
+
+            # Check for caption AFTER table (only if no table follows immediately)
+            for cap_start, cap_end in captions:
+                if cap_start >= table_end:
+                    between = text[table_end:cap_start]
+                    if between.strip() == "":
+                        # Check if there's a table after this caption
+                        table_after_caption = any(
+                            t_start > cap_end for t_start, t_end in tables
+                        )
+                        # Only attach caption-after if no table follows it
+                        if not table_after_caption:
+                            region_end = cap_end
+                    break  # Only check first caption after
+
+            protected.append((region_start, region_end))
 
         # Find all code blocks
         for match in self.code_pattern.finditer(text):
@@ -244,16 +284,6 @@ class MarkdownChunkerProvider(ChunkerProvider):
         # Sort by start position
         protected.sort()
         return protected
-
-    def _chunk_overlaps_protected_region(
-        self, chunk_start: int, chunk_end: int, protected_regions: List[Tuple[int, int]]
-    ) -> bool:
-        """Check if a chunk overlaps with any protected region (table or code block)."""
-        for prot_start, prot_end in protected_regions:
-            # Check if protected region is fully or partially within chunk
-            if prot_start < chunk_end and prot_end > chunk_start:
-                return True
-        return False
 
     def _merge_tiny_chunks(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Merge consecutive tiny chunks by combining with the next chunk."""
@@ -302,7 +332,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
     ) -> List[Dict[str, Any]]:
         """Split chunks larger than max_chunk_size at paragraph boundaries.
 
-        Never splits tables or code blocks, keeping them atomic.
+        Splits BETWEEN tables/code blocks, never inside them.
         """
         protected_regions = self._find_protected_regions(full_text)
         result = []
@@ -315,61 +345,85 @@ class MarkdownChunkerProvider(ChunkerProvider):
                 result.append(chunk)
                 continue
 
-            # Check if chunk contains tables or code blocks
             chunk_start = full_text.find(raw)
-            chunk_end = chunk_start + len(raw)
 
-            if self._chunk_overlaps_protected_region(
-                chunk_start, chunk_end, protected_regions
-            ):
-                # Chunk contains protected region, keep it atomic
+            # Find valid split points (between protected regions, not inside)
+            splits = self._find_valid_split_points(raw, chunk_start, protected_regions)
+
+            if not splits:
+                # No valid split points, keep chunk as-is
                 result.append(chunk)
                 continue
 
-            # Split at paragraph boundaries
-            paragraphs = raw.split("\n\n")
-            current_raw = []
-            current_size = 0
-
-            for para in paragraphs:
-                para_size = len(para) + 2  # +2 for the \n\n separator
-
-                # If adding this paragraph would exceed max, flush current chunk
-                if current_size + para_size > self.max_chunk_size and current_raw:
-                    sub_raw = "\n\n".join(current_raw)
-                    result.append(
-                        {
-                            "raw_chunk": sub_raw,
-                            "enhanced_chunk": self._make_enhanced_chunk(sub_raw, chunk),
-                            "header_path": chunk.get("header_path", []),
-                            "level": chunk.get("level", 0),
-                            "title": chunk.get("title", ""),
-                            "start": chunk.get("start", 0),
-                            "end": chunk.get("end", 0),
-                        }
-                    )
-                    current_raw = [para]
-                    current_size = para_size
-                else:
-                    current_raw.append(para)
-                    current_size += para_size
-
-            # Emit remaining paragraphs
-            if current_raw:
-                sub_raw = "\n\n".join(current_raw)
-                result.append(
-                    {
-                        "raw_chunk": sub_raw,
-                        "enhanced_chunk": self._make_enhanced_chunk(sub_raw, chunk),
-                        "header_path": chunk.get("header_path", []),
-                        "level": chunk.get("level", 0),
-                        "title": chunk.get("title", ""),
-                        "start": chunk.get("start", 0),
-                        "end": chunk.get("end", 0),
-                    }
-                )
+            # Split at valid boundaries
+            result.extend(self._split_at_points(raw, splits, chunk))
 
         return result
+
+    def _find_valid_split_points(
+        self, text: str, offset: int, protected_regions: List[Tuple[int, int]]
+    ) -> List[int]:
+        """Find paragraph boundaries (\\n\\n) that are NOT inside a protected region."""
+        splits = []
+        for match in re.finditer(r"\n\n+", text):
+            # Check both start and end of the whitespace to handle boundary cases
+            abs_start = offset + match.start()
+            abs_end = offset + match.end()
+            # Valid split if the boundary falls between protected regions
+            if not self._position_in_protected_region(
+                abs_start, protected_regions
+            ) or not self._position_in_protected_region(abs_end - 1, protected_regions):
+                # Additional check: don't split if we're completely inside a single region
+                inside_same_region = any(
+                    start <= abs_start and abs_end <= end
+                    for start, end in protected_regions
+                )
+                if not inside_same_region:
+                    splits.append(match.start())
+        return splits
+
+    def _position_in_protected_region(
+        self, pos: int, protected_regions: List[Tuple[int, int]]
+    ) -> bool:
+        """Check if a position falls inside any protected region."""
+        for start, end in protected_regions:
+            if start <= pos < end:
+                return True
+        return False
+
+    def _split_at_points(
+        self, text: str, splits: List[int], original_chunk: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Split text at given positions, creating sub-chunks."""
+        result = []
+        prev = 0
+
+        for pos in sorted(splits):
+            segment = text[prev:pos].strip()
+            if segment:
+                result.append(self._make_sub_chunk(segment, original_chunk))
+            prev = pos
+
+        # Final segment
+        segment = text[prev:].strip()
+        if segment:
+            result.append(self._make_sub_chunk(segment, original_chunk))
+
+        return result
+
+    def _make_sub_chunk(
+        self, raw: str, original_chunk: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Create a sub-chunk with proper metadata."""
+        return {
+            "raw_chunk": raw,
+            "enhanced_chunk": self._make_enhanced_chunk(raw, original_chunk),
+            "header_path": original_chunk.get("header_path", []),
+            "level": original_chunk.get("level", 0),
+            "title": original_chunk.get("title", ""),
+            "start": original_chunk.get("start", 0),
+            "end": original_chunk.get("end", 0),
+        }
 
     def _make_enhanced_chunk(
         self, raw_chunk: str, original_chunk: Dict[str, Any]

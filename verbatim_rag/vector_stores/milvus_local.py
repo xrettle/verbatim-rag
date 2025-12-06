@@ -3,7 +3,6 @@ Local Milvus Lite storage implementation.
 """
 
 import logging
-from typing import Optional
 
 from .milvus_base import BaseMilvusStore
 

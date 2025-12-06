@@ -3,7 +3,7 @@ Cloud Milvus storage implementation with BM25 full-text search support.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from .base import SearchResult
 from .milvus_base import BaseMilvusStore
@@ -145,7 +145,9 @@ class CloudMilvusStore(BaseMilvusStore):
                     self.client.load_collection(collection_name=self.collection_name)
                     logger.info(f"Loaded collection: {self.collection_name}")
                 except Exception as e:
-                    logger.warning(f"Failed to load collection {self.collection_name}: {e}")
+                    logger.warning(
+                        f"Failed to load collection {self.collection_name}: {e}"
+                    )
 
                 logger.info(f"Created cloud Milvus collection: {self.collection_name}")
 
@@ -253,10 +255,10 @@ class CloudMilvusStore(BaseMilvusStore):
 
         # Load the documents collection into memory
         try:
-            self.client.load_collection(
-                collection_name=self.documents_collection_name
+            self.client.load_collection(collection_name=self.documents_collection_name)
+            logger.info(
+                f"Loaded documents collection: {self.documents_collection_name}"
             )
-            logger.info(f"Loaded documents collection: {self.documents_collection_name}")
         except Exception as e:
             logger.warning(
                 f"Failed to load documents collection {self.documents_collection_name}: {e}"

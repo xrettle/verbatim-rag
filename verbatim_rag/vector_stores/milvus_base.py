@@ -280,7 +280,9 @@ class BaseMilvusStore(VectorStore):
                 results = [merged]
 
             except Exception as e:
-                logger.warning(f"Hybrid search failed: {e}, falling back to dense search")
+                logger.warning(
+                    f"Hybrid search failed: {e}, falling back to dense search"
+                )
                 results = self.client.search(
                     collection_name=self.collection_name,
                     data=[dense_query],
@@ -307,7 +309,8 @@ class BaseMilvusStore(VectorStore):
             results = self.client.query(
                 collection_name=self.collection_name,
                 filter=filter or "",
-                output_fields=["id", "text", "enhanced_text", "metadata"] + dynamic_fields,
+                output_fields=["id", "text", "enhanced_text", "metadata"]
+                + dynamic_fields,
                 limit=limit,
             )
 
@@ -444,7 +447,11 @@ class BaseMilvusStore(VectorStore):
         # Multiple methods: merge with RRF
         logger.info(f"Merging {len(results_by_method)} search methods using RRF")
         merged_hits = merge_hybrid_results(
-            results_by_method, top_k, hybrid_weights, rrf_k, log_label=self.__class__.__name__
+            results_by_method,
+            top_k,
+            hybrid_weights,
+            rrf_k,
+            log_label=self.__class__.__name__,
         )
         return convert_hits_to_results(merged_hits, dynamic_fields)
 
