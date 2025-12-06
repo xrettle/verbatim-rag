@@ -17,6 +17,9 @@ from .hybrid_search import (
 
 logger = logging.getLogger(__name__)
 
+# Milvus VARCHAR field limit (slightly under 65535 to be safe)
+MAX_TEXT_LENGTH = 65000
+
 
 class BaseMilvusStore(VectorStore):
     """
@@ -71,6 +74,16 @@ class BaseMilvusStore(VectorStore):
         base_fields = ["text", "enhanced_text", "metadata"]
         return base_fields + self._get_dynamic_fields()
 
+    def _truncate_text(self, text: str, field_name: str, chunk_id: str) -> str:
+        """Truncate text to MAX_TEXT_LENGTH if needed, with warning."""
+        if len(text) <= MAX_TEXT_LENGTH:
+            return text
+        logger.warning(
+            f"Truncating {field_name} for chunk {chunk_id}: "
+            f"{len(text)} chars -> {MAX_TEXT_LENGTH} chars"
+        )
+        return text[:MAX_TEXT_LENGTH]
+
     def add_vectors(
         self,
         ids: List[str],
@@ -94,8 +107,10 @@ class BaseMilvusStore(VectorStore):
 
             item = {
                 "id": ids[i],
-                "text": texts[i],
-                "enhanced_text": enhanced_texts[i],
+                "text": self._truncate_text(texts[i], "text", ids[i]),
+                "enhanced_text": self._truncate_text(
+                    enhanced_texts[i], "enhanced_text", ids[i]
+                ),
                 "metadata": safe_metadata,
                 **promoted,
             }
