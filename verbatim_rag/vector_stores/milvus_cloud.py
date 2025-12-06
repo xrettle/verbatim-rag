@@ -76,7 +76,7 @@ class CloudMilvusStore(BaseMilvusStore):
                     field_name="id",
                     datatype=DataType.VARCHAR,
                     is_primary=True,
-                    max_length=100,
+                    max_length=512,
                 )
 
                 if self.enable_dense:
@@ -95,13 +95,13 @@ class CloudMilvusStore(BaseMilvusStore):
                 schema.add_field(
                     field_name="text",
                     datatype=DataType.VARCHAR,
-                    max_length=65535,
+                    max_length=128000,
                     enable_analyzer=True,
                 )
                 schema.add_field(
                     field_name="enhanced_text",
                     datatype=DataType.VARCHAR,
-                    max_length=65535,
+                    max_length=128000,
                     enable_analyzer=True,
                 )
                 schema.add_field(field_name="metadata", datatype=DataType.JSON)
