@@ -285,6 +285,20 @@ class MarkdownChunkerProvider(ChunkerProvider):
         protected.sort()
         return protected
 
+    def _combine_chunks(
+        self, first: Dict[str, Any], second: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Combine two adjacent chunks, keeping metadata from the first."""
+        return {
+            "raw_chunk": first["raw_chunk"] + second["raw_chunk"],
+            "enhanced_chunk": first["enhanced_chunk"] + second["enhanced_chunk"],
+            "header_path": first.get("header_path", []),
+            "level": first.get("level", 0),
+            "title": first.get("title", ""),
+            "start": first.get("start", 0),
+            "end": second.get("end", first.get("end", 0)),
+        }
+
     def _merge_tiny_chunks(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Merge consecutive tiny chunks by combining with the next chunk."""
         if not chunks:
@@ -298,31 +312,27 @@ class MarkdownChunkerProvider(ChunkerProvider):
 
             # If this chunk is tiny and not the last chunk, merge with next
             if len(chunk["raw_chunk"]) < self.min_chunk_size and i + 1 < len(chunks):
-                merged_raw = chunk["raw_chunk"] + chunks[i + 1]["raw_chunk"]
-                merged_enhanced = (
-                    chunk["enhanced_chunk"] + chunks[i + 1]["enhanced_chunk"]
-                )
-
-                # Use the path from the first (smaller) chunk for context
-                merged_chunk = {
-                    "raw_chunk": merged_raw,
-                    "enhanced_chunk": merged_enhanced,
-                    "header_path": chunk.get("header_path", []),
-                    "level": chunk.get("level", 0),
-                    "title": chunk.get("title", ""),
-                    "start": chunk.get("start", 0),
-                    "end": chunks[i + 1].get("end", 0),
-                }
+                merged_chunk = self._combine_chunks(chunk, chunks[i + 1])
 
                 # Check if merged result is still tiny - if so, queue for next iteration
-                if len(merged_raw) < self.min_chunk_size and i + 2 < len(chunks):
+                if len(merged_chunk["raw_chunk"]) < self.min_chunk_size and i + 2 < len(
+                    chunks
+                ):
                     chunks[i + 1] = merged_chunk
                     i += 1
                 else:
                     result.append(merged_chunk)
                     i += 2
             else:
-                result.append(chunk)
+                # If this is the last chunk and it's tiny, merge backward
+                if (
+                    i == len(chunks) - 1
+                    and len(chunk["raw_chunk"]) < self.min_chunk_size
+                    and result
+                ):
+                    result[-1] = self._combine_chunks(result[-1], chunk)
+                else:
+                    result.append(chunk)
                 i += 1
 
         return result
@@ -357,6 +367,10 @@ class MarkdownChunkerProvider(ChunkerProvider):
 
             # Split at valid boundaries
             result.extend(self._split_at_points(raw, splits, chunk))
+
+        # Splitting can create tiny fragments; merge them back up if needed
+        if self.min_chunk_size is not None:
+            return self._merge_tiny_chunks(result)
 
         return result
 
@@ -394,20 +408,33 @@ class MarkdownChunkerProvider(ChunkerProvider):
     def _split_at_points(
         self, text: str, splits: List[int], original_chunk: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Split text at given positions, creating sub-chunks."""
-        result = []
+        """Split text at given positions, creating sub-chunks up to max size."""
+        # Build paragraph segments
+        points = sorted(set(splits + [len(text)]))
+        paragraphs = []
         prev = 0
-
-        for pos in sorted(splits):
-            segment = text[prev:pos].strip()
-            if segment:
-                result.append(self._make_sub_chunk(segment, original_chunk))
+        for pos in points:
+            seg = text[prev:pos]
+            if seg.strip():
+                paragraphs.append(seg)
             prev = pos
 
-        # Final segment
-        segment = text[prev:].strip()
-        if segment:
-            result.append(self._make_sub_chunk(segment, original_chunk))
+        # Greedily combine paragraphs until adding the next would exceed max_chunk_size
+        result = []
+        current = ""
+        for seg in paragraphs:
+            if not current:
+                current = seg
+                continue
+
+            if len(current) + len(seg) <= self.max_chunk_size:
+                current += seg
+            else:
+                result.append(self._make_sub_chunk(current, original_chunk))
+                current = seg
+
+        if current:
+            result.append(self._make_sub_chunk(current, original_chunk))
 
         return result
 
