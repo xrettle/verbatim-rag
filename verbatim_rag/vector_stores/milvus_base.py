@@ -75,14 +75,17 @@ class BaseMilvusStore(VectorStore):
         return base_fields + self._get_dynamic_fields()
 
     def _truncate_text(self, text: str, field_name: str, chunk_id: str) -> str:
-        """Truncate text to MAX_TEXT_LENGTH if needed, with warning."""
-        if len(text) <= MAX_TEXT_LENGTH:
+        """Truncate text to MAX_TEXT_LENGTH bytes if needed, with warning."""
+        encoded = text.encode("utf-8")
+        if len(encoded) <= MAX_TEXT_LENGTH:
             return text
+        # Truncate by bytes, then decode back (may be slightly under limit)
+        truncated = encoded[:MAX_TEXT_LENGTH].decode("utf-8", errors="ignore")
         logger.warning(
             f"Truncating {field_name} for chunk {chunk_id}: "
-            f"{len(text)} chars -> {MAX_TEXT_LENGTH} chars"
+            f"{len(encoded)} bytes -> {len(truncated.encode('utf-8'))} bytes"
         )
-        return text[:MAX_TEXT_LENGTH]
+        return truncated
 
     def add_vectors(
         self,
