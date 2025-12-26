@@ -4,7 +4,7 @@ Unified index class for the Verbatim RAG system.
 
 import logging
 
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Any, Union, Tuple, Iterable
 from tqdm import tqdm
 from verbatim_rag.document import Document
 from verbatim_rag.schema import DocumentSchema
@@ -340,6 +340,81 @@ class VerbatimIndex:
                 self._add_schema_document(doc)
             else:
                 self._add_document_internal(doc, document_type)
+
+    def add_documents_bulk(
+        self,
+        documents: Iterable[Union[DocumentSchema, Document]],
+        batch_chunks: int = 2000,
+        batch_docs: int = 500,
+    ) -> None:
+        """
+        Bulk document ingestion with chunk and embedding batching across documents.
+
+        Args:
+            documents: Iterable of DocumentSchema or Document objects to add
+            batch_chunks: Max number of chunks per embedding+insert batch
+            batch_docs: Max number of documents per metadata insert batch
+        """
+        chunk_ids: List[str] = []
+        chunk_texts: List[str] = []
+        chunk_enhanced_texts: List[str] = []
+        chunk_metadatas: List[Dict[str, Any]] = []
+        docs_buffer: List[Document] = []
+
+        def flush_chunks():
+            if not chunk_ids:
+                return
+            dense_embeddings, sparse_embeddings = self._generate_embeddings(
+                chunk_enhanced_texts
+            )
+            self._store_chunks(
+                ids=chunk_ids,
+                texts=chunk_texts,
+                enhanced_texts=chunk_enhanced_texts,
+                dense_embeddings=dense_embeddings,
+                sparse_embeddings=sparse_embeddings,
+                metadatas=chunk_metadatas,
+            )
+            chunk_ids.clear()
+            chunk_texts.clear()
+            chunk_enhanced_texts.clear()
+            chunk_metadatas.clear()
+
+        def flush_docs():
+            if not docs_buffer:
+                return
+            self._store_document_metadata(docs_buffer)
+            docs_buffer.clear()
+
+        for doc in documents:
+            if isinstance(doc, DocumentSchema):
+                doc = self._convert_schema_to_document(doc)
+
+            docs_buffer.append(doc)
+
+            if not doc.chunks:
+                chunks = self._chunk_document(doc)
+            else:
+                chunks = [
+                    (chunk, processed_chunk)
+                    for chunk in doc.chunks
+                    for processed_chunk in chunk.processed_chunks
+                ]
+
+            for chunk, processed_chunk in chunks:
+                chunk_ids.append(processed_chunk.id)
+                chunk_texts.append(chunk.content)
+                chunk_enhanced_texts.append(processed_chunk.enhanced_content)
+                chunk_metadatas.append(self._prepare_chunk_metadata(doc, chunk))
+
+                if len(chunk_ids) >= batch_chunks:
+                    flush_chunks()
+
+            if len(docs_buffer) >= batch_docs:
+                flush_docs()
+
+        flush_chunks()
+        flush_docs()
 
     def _add_schema_document(self, doc: DocumentSchema) -> None:
         """
