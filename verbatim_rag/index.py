@@ -571,16 +571,19 @@ class VerbatimIndex:
         Args:
             text: Optional text query for vector search or full text search
             k: Number of documents to retrieve
-            search_type: Type of search ("dense", "sparse", "hybrid", "full_text", "auto")
+            search_type: Type of search ("dense", "sparse", "hybrid", "full_text", "auto").
+                         Ignored when hybrid_weights is provided.
             filter: Optional Milvus filter expression for metadata filtering
-            search_params: Optional dict of search parameters (e.g., {"nprobe": 128} for IVF indexes)
-            hybrid_weights: Optional dict mapping method names to weights (e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2})
+            search_params: Optional dict of search parameters (e.g., {"nprobe": 128})
+            hybrid_weights: Optional dict mapping method names to weights
+                            (e.g., {"dense": 0.5, "sparse": 0.3, "full_text": 0.2}).
+                            When provided, overrides search_type.
             rrf_k: RRF constant for hybrid search (default: 60)
 
         Returns:
             List of SearchResult objects
         """
-        # If no text provided, do filter-only query
+        # 1. Filter-only query (no text)
         if not text:
             return self.vector_store.query(
                 dense_query=None,
@@ -589,76 +592,63 @@ class VerbatimIndex:
                 top_k=k,
                 filter=filter,
                 search_params=search_params,
-                hybrid_weights=hybrid_weights,
-                rrf_k=rrf_k,
             )
 
-        # Full text search - no embeddings needed
-        if search_type == "full_text":
-            return self.vector_store.query(
-                dense_query=None,
-                sparse_query=None,
-                text_query=text,
-                top_k=k,
-                search_type="full_text",
-                filter=filter,
-                search_params=search_params,
-                hybrid_weights=hybrid_weights,
-                rrf_k=rrf_k,
-            )
-
-        # Auto-detect search type based on available providers
-        if search_type == "auto":
-            dense_available = bool(self.dense_provider)
-            sparse_available = bool(self.sparse_provider)
-            full_text_available = bool(
-                getattr(self.vector_store, "enable_full_text", False)
-            )
-
-            if dense_available and sparse_available:
-                search_type = "hybrid"
-            elif dense_available:
-                search_type = "dense"
-            elif sparse_available:
-                search_type = "sparse"
-            elif full_text_available:
-                search_type = "full_text"
-            else:
-                raise ValueError("No embedding providers available")
-
-        # If auto-detected full text search, use it
-        if search_type == "full_text":
-            return self.vector_store.query(
-                dense_query=None,
-                sparse_query=None,
-                text_query=text,
-                top_k=k,
-                search_type="full_text",
-                filter=filter,
-                search_params=search_params,
-                hybrid_weights=hybrid_weights,
-                rrf_k=rrf_k,
-            )
-
-        # Generate query embeddings for vector search
-        query_dense = None
-        query_sparse = None
-
-        # NEW: If hybrid_weights provided, generate embeddings based on what's requested
+        # 2. If hybrid_weights provided, it drives everything
         if hybrid_weights is not None:
+            query_dense = None
+            query_sparse = None
+
             if "dense" in hybrid_weights and self.dense_provider:
                 query_dense = self.dense_provider.embed_text(text)
             if "sparse" in hybrid_weights and self.sparse_provider:
                 query_sparse = self.sparse_provider.embed_text(text)
-        else:
-            # LEGACY: Generate embeddings based on search_type
-            if search_type in ["dense", "hybrid"] and self.dense_provider:
-                query_dense = self.dense_provider.embed_text(text)
 
-            if search_type in ["sparse", "hybrid"] and self.sparse_provider:
-                query_sparse = self.sparse_provider.embed_text(text)
+            return self.vector_store.query(
+                dense_query=query_dense,
+                sparse_query=query_sparse,
+                text_query=text,
+                top_k=k,
+                filter=filter,
+                search_params=search_params,
+                hybrid_weights=hybrid_weights,
+                rrf_k=rrf_k,
+            )
 
-        # Search using vector store
+        # 3. Resolve search_type (auto-detection if needed)
+        if search_type == "auto":
+            if self.dense_provider and self.sparse_provider:
+                search_type = "hybrid"
+            elif self.dense_provider:
+                search_type = "dense"
+            elif self.sparse_provider:
+                search_type = "sparse"
+            elif getattr(self.vector_store, "enable_full_text", False):
+                search_type = "full_text"
+            else:
+                raise ValueError("No search method available")
+
+        # 4. Full text search (no embeddings needed)
+        if search_type == "full_text":
+            return self.vector_store.query(
+                dense_query=None,
+                sparse_query=None,
+                text_query=text,
+                top_k=k,
+                search_type="full_text",
+                filter=filter,
+                search_params=search_params,
+            )
+
+        # 5. Vector search (dense, sparse, or hybrid)
+        query_dense = None
+        query_sparse = None
+
+        if search_type in ("dense", "hybrid") and self.dense_provider:
+            query_dense = self.dense_provider.embed_text(text)
+        if search_type in ("sparse", "hybrid") and self.sparse_provider:
+            query_sparse = self.sparse_provider.embed_text(text)
+
         return self.vector_store.query(
             dense_query=query_dense,
             sparse_query=query_sparse,
@@ -667,7 +657,6 @@ class VerbatimIndex:
             search_type=search_type,
             filter=filter,
             search_params=search_params,
-            hybrid_weights=hybrid_weights,
             rrf_k=rrf_k,
         )
 
