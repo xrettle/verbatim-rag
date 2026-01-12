@@ -34,6 +34,7 @@ from verbatim_rag.rerankers import (
     CohereReranker,
     JinaReranker,
     SentenceTransformersReranker,
+    JinaV3Reranker,
 )
 
 # Optional ingestion module (requires docling + chonkie)

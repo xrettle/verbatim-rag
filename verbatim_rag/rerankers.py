@@ -123,7 +123,7 @@ class SentenceTransformersReranker(BaseReranker):
             from sentence_transformers import CrossEncoder
         except ImportError as exc:
             raise ImportError("pip install sentence-transformers") from exc
-        self.model = CrossEncoder(model, device=device)
+        self.model = CrossEncoder(model, device=device, trust_remote_code=True)
 
     def rerank(self, question: str, results: List[SearchResult]) -> List[SearchResult]:
         head, tail = self._split_results(results)
@@ -134,3 +134,33 @@ class SentenceTransformersReranker(BaseReranker):
         scores = self.model.predict(pairs)
         ranked = [r for _, r in sorted(zip(scores, head), reverse=True)]
         return ranked + tail
+
+
+class JinaV3Reranker(BaseReranker):
+    """Jina V3 reranker using transformers."""
+
+    def __init__(
+        self,
+        model: str = "jinaai/jina-reranker-v3",
+        rerank_k: int = 50,
+        text_field: str = "text",
+    ):
+        super().__init__(rerank_k=rerank_k, text_field=text_field)
+        try:
+            from transformers import AutoModel
+        except ImportError as exc:
+            raise ImportError("pip install transformers") from exc
+        self.model = AutoModel.from_pretrained(
+            model,
+            dtype="auto",
+            trust_remote_code=True,
+        )
+        self.model.eval()
+
+    def rerank(self, question: str, results: List[SearchResult]) -> List[SearchResult]:
+        head, tail = self._split_results(results)
+        if not head:
+            return results
+        texts = self._get_texts(head)
+        results = self.model.rerank(question, texts, top_n=self.rerank_k)
+        return [head[item["index"]] for item in results]
