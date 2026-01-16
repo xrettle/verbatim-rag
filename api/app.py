@@ -53,11 +53,17 @@ class QueryRequestModel(BaseModel):
     k: Optional[int] = None
     hybrid_weights: Optional[dict[str, float]] = None
     rrf_k: int = 60
+    filter: Optional[str] = None
+    search_params: Optional[dict[str, Any]] = None
 
 
 class StreamQueryRequestModel(BaseModel):
     question: str
     num_docs: int = 5
+    hybrid_weights: Optional[dict[str, float]] = None
+    rrf_k: int = 60
+    filter: Optional[str] = None
+    search_params: Optional[dict[str, Any]] = None
 
 
 class StatusResponse(BaseModel):
@@ -213,6 +219,8 @@ async def query_endpoint(
             k=request.k,
             hybrid_weights=request.hybrid_weights,
             rrf_k=request.rrf_k,
+            filter=request.filter,
+            search_params=request.search_params,
         )
 
         return response
@@ -238,6 +246,8 @@ async def query_async_endpoint(
             k=request.k,
             hybrid_weights=request.hybrid_weights,
             rrf_k=request.rrf_k,
+            filter=request.filter,
+            search_params=request.search_params,
         )
         return response
     except Exception as e:
@@ -293,6 +303,8 @@ async def query_async_endpoint(
             k=request.k,
             hybrid_weights=request.hybrid_weights,
             rrf_k=request.rrf_k,
+            filter=request.filter,
+            search_params=request.search_params,
         )
 
         return response
@@ -349,7 +361,12 @@ async def query_stream_endpoint(
             try:
                 stage_count = 0
                 async for stage in streaming_rag.stream_query(
-                    request.question, request.num_docs
+                    request.question,
+                    request.num_docs,
+                    filter=request.filter,
+                    hybrid_weights=request.hybrid_weights,
+                    rrf_k=request.rrf_k,
+                    search_params=request.search_params,
                 ):
                     stage_count += 1
                     logger.info(

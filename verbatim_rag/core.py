@@ -216,6 +216,7 @@ class VerbatimRAG:
         filter: Optional[str] = None,
         hybrid_weights: Optional[dict[str, float]] = None,
         rrf_k: int = 60,
+        search_params: Optional[dict[str, Any]] = None,
     ) -> QueryResponse:
         """
         Process a query through the Verbatim RAG system.
@@ -242,6 +243,7 @@ class VerbatimRAG:
             filter=filter,
             hybrid_weights=hybrid_weights,
             rrf_k=rrf_k,
+            search_params=search_params,
         )
         search_results = self._apply_reranker(question, search_results)
 
@@ -313,6 +315,7 @@ class VerbatimRAG:
         filter: Optional[str] = None,
         hybrid_weights: Optional[dict[str, float]] = None,
         rrf_k: int = 60,
+        search_params: Optional[dict[str, Any]] = None,
     ) -> QueryResponse:
         """
         Async version of query method.
@@ -339,6 +342,7 @@ class VerbatimRAG:
             filter=filter,
             hybrid_weights=hybrid_weights,
             rrf_k=rrf_k,
+            search_params=search_params,
         )
         search_results = await self._apply_reranker_async(question, search_results)
 

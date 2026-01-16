@@ -21,7 +21,13 @@ class StreamingRAG:
         self.rag = rag
 
     async def stream_query(
-        self, question: str, num_docs: int = None, filter: Optional[str] = None
+        self,
+        question: str,
+        num_docs: int = None,
+        filter: Optional[str] = None,
+        hybrid_weights: Optional[Dict[str, float]] = None,
+        rrf_k: int = 60,
+        search_params: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream a query response in stages:
@@ -33,6 +39,9 @@ class StreamingRAG:
             question: The user's question
             num_docs: Optional number of documents to retrieve
             filter: Optional vector-store filter expression (passed to VerbatimIndex)
+            hybrid_weights: Optional weights for hybrid search
+            rrf_k: RRF constant for hybrid search
+            search_params: Optional parameters for vector search (e.g. nprobe)
 
         Yields:
             Dictionary with type and data for each stage
@@ -55,7 +64,14 @@ class StreamingRAG:
                 return
 
             # Step 1: Retrieve documents and send them without highlights
-            docs = self.rag.index.query(text=question, k=self.rag.k, filter=filter)
+            docs = self.rag.index.query(
+                text=question,
+                k=self.rag.k,
+                filter=filter,
+                hybrid_weights=hybrid_weights,
+                rrf_k=rrf_k,
+                search_params=search_params,
+            )
             docs = await self.rag._apply_reranker_async(question, docs)
 
             documents_without_highlights = [
