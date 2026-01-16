@@ -6,7 +6,7 @@ to interleave verbatim facts contextually. Citation-only facts (beyond the displ
 limit) expand to a numbered reference token (e.g. "[6]") without verbatim text.
 """
 
-from typing import Optional
+from typing import Optional, Any
 import asyncio
 import logging
 from verbatim_rag.extractors import LLMSpanExtractor, SpanExtractor
