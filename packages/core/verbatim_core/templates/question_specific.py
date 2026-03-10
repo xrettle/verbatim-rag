@@ -9,8 +9,6 @@ selects the best-matching template for each query.
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
 from .base import TemplateStrategy
 from .filler import TemplateFiller
 
@@ -151,6 +149,8 @@ Based on the available documents:
 
         embedder = self._get_embedder()
         question_embedding = embedder.encode([question])[0]  # Shape: (embedding_dim,)
+
+        import numpy as np
 
         # Compute similarities to all examples at once using numpy
         similarities = np.dot(self._example_embeddings["embeddings"], question_embedding) / (
