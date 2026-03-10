@@ -3,8 +3,9 @@ Configuration management for the API
 """
 
 from pathlib import Path
-from pydantic_settings import BaseSettings
+
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class APIConfig(BaseSettings):
@@ -16,9 +17,7 @@ class APIConfig(BaseSettings):
     debug: bool = Field(default=False, env="API_DEBUG")
 
     # CORS configuration
-    cors_origins: list[str] = Field(
-        default=["http://localhost:3000"], env="CORS_ORIGINS"
-    )
+    cors_origins: list[str] = Field(default=["http://localhost:3000"], env="CORS_ORIGINS")
     cors_allow_credentials: bool = Field(default=True, env="CORS_ALLOW_CREDENTIALS")
 
     # RAG system paths

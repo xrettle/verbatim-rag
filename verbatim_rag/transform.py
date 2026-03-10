@@ -13,11 +13,11 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List
 
 from verbatim_rag.extractors import LLMSpanExtractor, SpanExtractor
-from verbatim_rag.templates import TemplateManager
-from verbatim_rag.response_builder import ResponseBuilder
-from verbatim_rag.vector_stores import SearchResult
 from verbatim_rag.llm_client import LLMClient
 from verbatim_rag.providers import RAGProvider
+from verbatim_rag.response_builder import ResponseBuilder
+from verbatim_rag.templates import TemplateManager
+from verbatim_rag.vector_stores import SearchResult
 
 
 def _coerce_context_to_results(context: Iterable[Dict[str, Any]]) -> List[SearchResult]:
@@ -32,9 +32,7 @@ def _coerce_context_to_results(context: Iterable[Dict[str, Any]]) -> List[Search
     results: List[SearchResult] = []
     for i, item in enumerate(context):
         if not isinstance(item, dict):
-            raise TypeError(
-                "Each context item must be a dict with 'content' or 'text'."
-            )
+            raise TypeError("Each context item must be a dict with 'content' or 'text'.")
         text = item.get("content") or item.get("text")
         if not text or not isinstance(text, str):
             raise ValueError("Context item missing 'content' (or 'text') string field.")
@@ -43,9 +41,7 @@ def _coerce_context_to_results(context: Iterable[Dict[str, Any]]) -> List[Search
             "source": item.get("source", ""),
             **(item.get("metadata") or {}),
         }
-        results.append(
-            SearchResult(id=f"ctx_{i}", score=1.0, metadata=metadata, text=text)
-        )
+        results.append(SearchResult(id=f"ctx_{i}", score=1.0, metadata=metadata, text=text))
     return results
 
 
@@ -95,9 +91,7 @@ class VerbatimTransform:
         citation_spans = all_spans[self.max_display_spans :]
 
         # 4) Generate answer via template manager
-        answer_text = self.template_manager.process(
-            question, display_spans, citation_spans
-        )
+        answer_text = self.template_manager.process(question, display_spans, citation_spans)
         answer_text = self.response_builder.clean_answer(answer_text)
 
         # 5) Build structured response
@@ -118,9 +112,7 @@ class VerbatimTransform:
         """Async version using the extractor/template async APIs."""
         search_results = _coerce_context_to_results(list(context))
 
-        relevant_spans = await self.extractor.extract_spans_async(
-            question, search_results
-        )
+        relevant_spans = await self.extractor.extract_spans_async(question, search_results)
 
         all_spans = []
         for doc_text, spans in relevant_spans.items():

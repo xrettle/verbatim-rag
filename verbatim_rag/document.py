@@ -7,12 +7,12 @@ This module provides a hierarchical document structure:
 - ProcessedChunk: Enhanced chunks with metadata and embeddings for retrieval
 """
 
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional, Dict
-from dataclasses import dataclass, field
 from pathlib import Path
-import uuid
+from typing import Any, Dict, List, Optional
 
 
 class DocumentType(Enum):
@@ -189,9 +189,7 @@ class Chunk:
         processed_chunk.chunk_id = self.id
         self.processed_chunks.append(processed_chunk)
 
-    def get_processed_chunk_by_id(
-        self, processed_id: str
-    ) -> Optional["ProcessedChunk"]:
+    def get_processed_chunk_by_id(self, processed_id: str) -> Optional["ProcessedChunk"]:
         """Get a specific processed chunk by ID."""
         for pc in self.processed_chunks:
             if pc.id == processed_id:

@@ -7,13 +7,13 @@ import logging
 from abc import abstractmethod
 from typing import Any, Dict, List, Optional
 
-from .base import VectorStore, SearchResult
-from .utils import json_serialize_safe, promote_metadata
+from .base import SearchResult, VectorStore
 from .hybrid_search import (
-    sanitize_hybrid_weights,
-    merge_hybrid_results,
     convert_hits_to_results,
+    merge_hybrid_results,
+    sanitize_hybrid_weights,
 )
+from .utils import json_serialize_safe, promote_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +111,7 @@ class BaseMilvusStore(VectorStore):
             item = {
                 "id": ids[i],
                 "text": self._truncate_text(texts[i], "text", ids[i]),
-                "enhanced_text": self._truncate_text(
-                    enhanced_texts[i], "enhanced_text", ids[i]
-                ),
+                "enhanced_text": self._truncate_text(enhanced_texts[i], "enhanced_text", ids[i]),
                 "metadata": safe_metadata,
                 **promoted,
             }
@@ -137,9 +135,7 @@ class BaseMilvusStore(VectorStore):
         for doc in documents:
             metadata = doc.get("metadata", {})
             safe_metadata = (
-                json_serialize_safe(metadata)
-                if isinstance(metadata, dict)
-                else metadata
+                json_serialize_safe(metadata) if isinstance(metadata, dict) else metadata
             )
 
             # Promote common filter fields to dynamic fields
@@ -298,9 +294,7 @@ class BaseMilvusStore(VectorStore):
                 results = [merged]
 
             except Exception as e:
-                logger.warning(
-                    f"Hybrid search failed: {e}, falling back to dense search"
-                )
+                logger.warning(f"Hybrid search failed: {e}, falling back to dense search")
                 results = self.client.search(
                     collection_name=self.collection_name,
                     data=[dense_query],
@@ -318,17 +312,14 @@ class BaseMilvusStore(VectorStore):
 
         return convert_hits_to_results(results[0], dynamic_fields)
 
-    def _filter_only_query(
-        self, filter: Optional[str], limit: int
-    ) -> List[SearchResult]:
+    def _filter_only_query(self, filter: Optional[str], limit: int) -> List[SearchResult]:
         """Query without vector search - just filtering/browsing."""
         try:
             dynamic_fields = self._get_dynamic_fields()
             results = self.client.query(
                 collection_name=self.collection_name,
                 filter=filter or "",
-                output_fields=["id", "text", "enhanced_text", "metadata"]
-                + dynamic_fields,
+                output_fields=["id", "text", "enhanced_text", "metadata"] + dynamic_fields,
                 limit=limit,
             )
 
@@ -392,9 +383,7 @@ class BaseMilvusStore(VectorStore):
                 f"full_text not available on {self.__class__.__name__}, "
                 "removing from hybrid_weights"
             )
-            hybrid_weights = {
-                k: v for k, v in hybrid_weights.items() if k != "full_text"
-            }
+            hybrid_weights = {k: v for k, v in hybrid_weights.items() if k != "full_text"}
 
         if not hybrid_weights:
             raise ValueError("No valid search methods in hybrid_weights")
@@ -428,11 +417,7 @@ class BaseMilvusStore(VectorStore):
             )
             results_by_method["sparse"] = sparse_results[0]
 
-        if (
-            "full_text" in hybrid_weights
-            and text_query is not None
-            and self.enable_full_text
-        ):
+        if "full_text" in hybrid_weights and text_query is not None and self.enable_full_text:
             try:
                 full_text_results = self.client.search(
                     collection_name=self.collection_name,
@@ -476,9 +461,7 @@ class BaseMilvusStore(VectorStore):
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """Get all documents stored in the documents collection."""
         try:
-            if self.client.has_collection(
-                collection_name=self.documents_collection_name
-            ):
+            if self.client.has_collection(collection_name=self.documents_collection_name):
                 results = self.client.query(
                     collection_name=self.documents_collection_name,
                     filter="",
@@ -503,9 +486,7 @@ class BaseMilvusStore(VectorStore):
         if not ids:
             return
         quoted = ",".join([f'"{_id}"' for _id in ids])
-        self.client.delete(
-            collection_name=self.collection_name, filter=f"id in [{quoted}]"
-        )
+        self.client.delete(collection_name=self.collection_name, filter=f"id in [{quoted}]")
 
     def delete_document(self, document_id: str):
         """Delete document row and all chunks for a document by document_id."""

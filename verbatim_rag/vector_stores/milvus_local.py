@@ -39,9 +39,7 @@ class LocalMilvusStore(BaseMilvusStore):
 
         # Validate at least one embedding type is enabled (before calling super)
         if not enable_dense and not enable_sparse:
-            raise ValueError(
-                "At least one of enable_dense or enable_sparse must be True"
-            )
+            raise ValueError("At least one of enable_dense or enable_sparse must be True")
 
         self.db_path = db_path
 
@@ -60,7 +58,7 @@ class LocalMilvusStore(BaseMilvusStore):
     def _setup_client(self):
         """Initialize Milvus Lite client and create collections."""
         try:
-            from pymilvus import MilvusClient, DataType
+            from pymilvus import DataType, MilvusClient
 
             self.client = MilvusClient(self.db_path)
 
@@ -105,9 +103,7 @@ class LocalMilvusStore(BaseMilvusStore):
                 )
                 schema.add_field(field_name="metadata", datatype=DataType.JSON)
 
-                self.client.create_collection(
-                    collection_name=self.collection_name, schema=schema
-                )
+                self.client.create_collection(collection_name=self.collection_name, schema=schema)
 
                 # Create indexes
                 index_params = self.client.prepare_index_params()
@@ -135,9 +131,7 @@ class LocalMilvusStore(BaseMilvusStore):
                 logger.info(f"Created indexes for collection: {self.collection_name}")
 
             # Create documents collection (no vectors, just metadata)
-            if not self.client.has_collection(
-                collection_name=self.documents_collection_name
-            ):
+            if not self.client.has_collection(collection_name=self.documents_collection_name):
                 doc_schema = self.client.create_schema(
                     auto_id=False,
                     enable_dynamic_field=True,
@@ -149,12 +143,8 @@ class LocalMilvusStore(BaseMilvusStore):
                     is_primary=True,
                     max_length=100,
                 )
-                doc_schema.add_field(
-                    field_name="title", datatype=DataType.VARCHAR, max_length=512
-                )
-                doc_schema.add_field(
-                    field_name="source", datatype=DataType.VARCHAR, max_length=512
-                )
+                doc_schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
+                doc_schema.add_field(field_name="source", datatype=DataType.VARCHAR, max_length=512)
                 doc_schema.add_field(
                     field_name="content_type", datatype=DataType.VARCHAR, max_length=50
                 )
@@ -169,9 +159,7 @@ class LocalMilvusStore(BaseMilvusStore):
                     collection_name=self.documents_collection_name, schema=doc_schema
                 )
 
-                logger.info(
-                    f"Created documents collection: {self.documents_collection_name}"
-                )
+                logger.info(f"Created documents collection: {self.documents_collection_name}")
 
             logger.info(f"Connected to Milvus Lite: {self.db_path}")
 

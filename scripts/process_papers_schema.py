@@ -9,12 +9,13 @@ import json
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
+
 from tqdm import tqdm
 
 # Import verbatim-rag components
 from verbatim_rag import VerbatimIndex
-from verbatim_rag.schema import DocumentSchema
 from verbatim_rag.ingestion.document_processor import DocumentProcessor
+from verbatim_rag.schema import DocumentSchema
 
 
 class DocumentSchemaProcessor:
@@ -138,13 +139,12 @@ class DocumentSchemaProcessor:
 
                 # Reconstruct DocumentSchema
                 from datetime import datetime
+
                 from verbatim_rag.document import DocumentType
 
                 # Convert datetime back
                 if "created_at" in doc_data:
-                    doc_data["created_at"] = datetime.fromisoformat(
-                        doc_data["created_at"]
-                    )
+                    doc_data["created_at"] = datetime.fromisoformat(doc_data["created_at"])
 
                 # Convert content_type back to enum
                 if "content_type" in doc_data:
@@ -175,9 +175,7 @@ class DocumentSchemaProcessor:
             return None
 
         # Create index - using google/embeddinggemma-300m as in the modified script
-        index = VerbatimIndex(
-            dense_model="google/embeddinggemma-300m", db_path=index_path
-        )
+        index = VerbatimIndex(dense_model="google/embeddinggemma-300m", db_path=index_path)
 
         # Add documents to index
         print("Adding documents to index...")
@@ -217,9 +215,7 @@ class DocumentSchemaProcessor:
             papers_to_process = []
             for paper in papers:
                 paper_id = paper.get("id", "")
-                if not self.is_processed(paper_id) and not self.is_document_saved(
-                    paper_id
-                ):
+                if not self.is_processed(paper_id) and not self.is_document_saved(paper_id):
                     papers_to_process.append(paper)
 
             print(f"Papers needing processing: {len(papers_to_process)}")
@@ -258,9 +254,7 @@ class DocumentSchemaProcessor:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Process papers using DocumentSchema.from_url"
-    )
+    parser = argparse.ArgumentParser(description="Process papers using DocumentSchema.from_url")
     parser.add_argument("--papers-json", required=True, help="Path to papers JSON file")
     parser.add_argument(
         "--doc-dir",
@@ -271,9 +265,7 @@ def main():
         "--status-file", default="downloads/schema_status.json", help="Status file path"
     )
     parser.add_argument("--index-path", help="Path for vector index (optional)")
-    parser.add_argument(
-        "--max-papers", type=int, help="Maximum papers to process (for testing)"
-    )
+    parser.add_argument("--max-papers", type=int, help="Maximum papers to process (for testing)")
     parser.add_argument(
         "--skip-processing",
         action="store_true",

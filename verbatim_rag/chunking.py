@@ -8,10 +8,9 @@ ChonkieChunkerProvider, SimpleChunkerProvider) instead.
 This module is kept for backward compatibility but may be removed in a future version.
 """
 
-import warnings
-
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -61,9 +60,7 @@ class ChunkingConfig:
         preserve_headings = True if recipe == "markdown" else False
 
         return cls(
-            strategy=ChunkingStrategy(
-                str(metadata.get("chunker_type", "recursive")).lower()
-            ),
+            strategy=ChunkingStrategy(str(metadata.get("chunker_type", "recursive")).lower()),
             recipe=recipe,
             lang=str(metadata.get("lang", "en")),
             chunk_size=int(metadata.get("chunk_size", 512)),
@@ -114,9 +111,7 @@ class ChonkieChunker(ChunkerInterface):
 
                     chunker = HierarchicalWrapper(chunker)
                 except ImportError:
-                    print(
-                        "Warning: HierarchicalWrapper not found, using regular chunker"
-                    )
+                    print("Warning: HierarchicalWrapper not found, using regular chunker")
 
             return chunker
         elif self.config.strategy == ChunkingStrategy.TOKEN:
@@ -142,9 +137,7 @@ class ChonkieChunker(ChunkerInterface):
             )
         else:
             # Default fallback to recursive
-            return chonkie.RecursiveChunker.from_recipe(
-                self.config.recipe, lang=self.config.lang
-            )
+            return chonkie.RecursiveChunker.from_recipe(self.config.recipe, lang=self.config.lang)
 
     def chunk(self, text: str) -> List[str]:
         """Chunk text using the configured chonkie chunker."""
@@ -177,9 +170,7 @@ class ChunkingService:
         )
         self.default_config = default_config or ChunkingConfig()
 
-    def chunk_text(
-        self, text: str, config: Optional[ChunkingConfig] = None
-    ) -> List[str]:
+    def chunk_text(self, text: str, config: Optional[ChunkingConfig] = None) -> List[str]:
         """Chunk text using the specified or default configuration."""
         if not text.strip():
             return []

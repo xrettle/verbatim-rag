@@ -64,9 +64,7 @@ class LLMIntentDetector(IntentDetector):
         self.fallback_answer = fallback_answer
 
     @classmethod
-    def from_config(
-        cls, llm_client: LLMClient, config: dict[str, Any]
-    ) -> "LLMIntentDetector":
+    def from_config(cls, llm_client: LLMClient, config: dict[str, Any]) -> "LLMIntentDetector":
         return cls(
             llm_client=llm_client,
             prompt=config.get("prompt"),

@@ -1,0 +1,61 @@
+site_name: Verbatim RAG
+site_description: Hallucination-prevention RAG system with verbatim span extraction
+site_url: https://krlabsorg.github.io/verbatim-rag/
+repo_url: https://github.com/krlabsorg/verbatim-rag
+repo_name: KRLabsOrg/verbatim-rag
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: deep-orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep-orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    code: JetBrains Mono
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 3
+            members_order: source
+            docstring_style: google
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quickstart: getting-started/quickstart.md
+  - Guide:
+    - Verbatim Core (Extractor): guide/verbatim-core.md
+    - Full RAG System: guide/verbatim-rag.md
+  - API Reference:
+    - verbatim_core: api/verbatim-core.md
+    - verbatim_rag: api/verbatim-rag.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list

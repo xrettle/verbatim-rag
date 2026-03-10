@@ -7,12 +7,12 @@ IndexProvider adapts the in-package VerbatimIndex to the provider interface.
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
-import asyncio
 
-from verbatim_rag.index import VerbatimIndex
 from verbatim_rag.core import VerbatimRAG
+from verbatim_rag.index import VerbatimIndex
 from verbatim_rag.universal_document import UniversalDocument
 
 
@@ -66,9 +66,7 @@ class IndexProvider(RAGProvider):
                 title=r.metadata.get("title", ""),
                 source=r.metadata.get("source", ""),
                 metadata={
-                    k: v
-                    for k, v in (r.metadata or {}).items()
-                    if k not in {"title", "source"}
+                    k: v for k, v in (r.metadata or {}).items() if k not in {"title", "source"}
                 },
             )
             context.append(doc.to_context())
@@ -82,9 +80,7 @@ class IndexProvider(RAGProvider):
         hybrid_weights: Optional[Dict[str, float]] = None,
         rrf_k: int = 60,
     ) -> List[Dict[str, Any]]:
-        return await asyncio.to_thread(
-            self.retrieve, question, k, filter, hybrid_weights, rrf_k
-        )
+        return await asyncio.to_thread(self.retrieve, question, k, filter, hybrid_weights, rrf_k)
 
 
 class VerbatimRAGProvider(RAGProvider):
@@ -120,9 +116,7 @@ class VerbatimRAGProvider(RAGProvider):
                     "title": r.metadata.get("title", ""),
                     "source": r.metadata.get("source", ""),
                     "metadata": {
-                        k: v
-                        for k, v in (r.metadata or {}).items()
-                        if k not in {"title", "source"}
+                        k: v for k, v in (r.metadata or {}).items() if k not in {"title", "source"}
                     },
                 }
             )
@@ -136,6 +130,4 @@ class VerbatimRAGProvider(RAGProvider):
         hybrid_weights: Optional[Dict[str, float]] = None,
         rrf_k: int = 60,
     ) -> List[Dict[str, Any]]:
-        return await asyncio.to_thread(
-            self.retrieve, question, k, filter, hybrid_weights, rrf_k
-        )
+        return await asyncio.to_thread(self.retrieve, question, k, filter, hybrid_weights, rrf_k)

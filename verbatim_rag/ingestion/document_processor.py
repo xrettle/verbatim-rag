@@ -2,8 +2,8 @@
 Simple document processing pipeline following the pattern in create_sample_index.py
 """
 
-from typing import List, Optional, Dict, Any, Union
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 try:
     from docling.document_converter import DocumentConverter
@@ -12,8 +12,8 @@ try:
 except ImportError:
     DOCLING_AVAILABLE = False
 
-from ..document import Document, Chunk, ProcessedChunk, DocumentType, ChunkType
 from ..chunker_providers import ChunkerProvider, MarkdownChunkerProvider
+from ..document import Chunk, ChunkType, Document, DocumentType, ProcessedChunk
 
 
 class DocumentProcessor:
@@ -169,23 +169,13 @@ class DocumentProcessor:
         supported_exts = {".pdf", ".docx", ".html", ".htm", ".txt", ".md"}
 
         if recursive:
-            files = [
-                f
-                for f in directory_path.rglob("*")
-                if f.suffix.lower() in supported_exts
-            ]
+            files = [f for f in directory_path.rglob("*") if f.suffix.lower() in supported_exts]
         else:
-            files = [
-                f
-                for f in directory_path.glob("*")
-                if f.suffix.lower() in supported_exts
-            ]
+            files = [f for f in directory_path.glob("*") if f.suffix.lower() in supported_exts]
 
         for file_path in files:
             try:
-                document = self.process_file(
-                    file_path, metadata={"directory": str(directory_path)}
-                )
+                document = self.process_file(file_path, metadata={"directory": str(directory_path)})
                 documents.append(document)
             except Exception as e:
                 print(f"Warning: Failed to process {file_path}: {e}")
@@ -274,9 +264,7 @@ class DocumentProcessor:
         """Create processor with semantic chunking (uses ChonkieChunkerProvider)."""
         from ..chunker_providers import ChonkieChunkerProvider
 
-        chunker = ChonkieChunkerProvider(
-            recipe="default", chunk_size=chunk_size, chunk_overlap=50
-        )
+        chunker = ChonkieChunkerProvider(recipe="default", chunk_size=chunk_size, chunk_overlap=50)
         return cls(chunker)
 
     @classmethod

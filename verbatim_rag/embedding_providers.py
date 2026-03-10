@@ -2,9 +2,9 @@
 Simple embedding providers for the Verbatim RAG system.
 """
 
-from abc import ABC, abstractmethod
-from typing import List, Dict
 import logging
+from abc import ABC, abstractmethod
+from typing import Dict, List
 
 import numpy as np
 
@@ -89,8 +89,9 @@ class OpenAIProvider(DenseEmbeddingProvider):
 
     def _setup_client(self):
         try:
-            import openai
             import os
+
+            import openai
 
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:

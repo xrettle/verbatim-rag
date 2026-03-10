@@ -4,7 +4,7 @@ Hybrid search utilities for combining results from multiple search methods.
 
 import json
 import logging
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from .base import SearchResult
@@ -36,9 +36,7 @@ def sanitize_hybrid_weights(hybrid_weights: Dict[str, float]) -> Dict[str, float
             logger.warning("Ignoring unsupported hybrid method '%s'", method)
             continue
         if not isinstance(weight, (int, float)) or weight <= 0:
-            logger.warning(
-                "Ignoring non-positive weight for method '%s': %s", method, weight
-            )
+            logger.warning("Ignoring non-positive weight for method '%s': %s", method, weight)
             continue
         cleaned[method] = float(weight)
 
@@ -121,9 +119,7 @@ def merge_hybrid_results(
                 hit_map[hit_id] = hit
             scores_by_id[hit_id] += weighted_score
 
-    sorted_ids = sorted(
-        scores_by_id.keys(), key=lambda id: scores_by_id[id], reverse=True
-    )
+    sorted_ids = sorted(scores_by_id.keys(), key=lambda id: scores_by_id[id], reverse=True)
     merged_results = []
     for hit_id in sorted_ids[:top_k]:
         hit = hit_map[hit_id].copy()

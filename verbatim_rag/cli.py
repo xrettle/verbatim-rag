@@ -36,9 +36,7 @@ def main():
     index_parser.add_argument(
         "--input", "-i", required=True, nargs="+", help="Paths to input documents"
     )
-    index_parser.add_argument(
-        "--output", "-o", required=True, help="Path to save the index"
-    )
+    index_parser.add_argument("--output", "-o", required=True, help="Path to save the index")
 
     # Template command
     template_parser = subparsers.add_parser("template", help="Template management")
@@ -49,12 +47,8 @@ def main():
         nargs="+",
         help="Questions to create templates for",
     )
-    template_parser.add_argument(
-        "--output", "-o", required=True, help="Path to save templates"
-    )
-    template_parser.add_argument(
-        "--model", "-m", default="gpt-4", help="OpenAI model to use"
-    )
+    template_parser.add_argument("--output", "-o", required=True, help="Path to save templates")
+    template_parser.add_argument("--model", "-m", default="gpt-4", help="OpenAI model to use")
 
     query_parser = subparsers.add_parser("query", help="Query the Verbatim RAG system")
     query_parser.add_argument("--index", "-i", required=True, help="Path to the index")
@@ -63,12 +57,8 @@ def main():
         "--num-docs", "-n", type=int, default=5, help="Number of documents to retrieve"
     )
     query_parser.add_argument("--templates", "-t", help="Path to templates file")
-    query_parser.add_argument(
-        "--model", "-m", default="gpt-4", help="OpenAI model to use"
-    )
-    query_parser.add_argument(
-        "--output", "-o", help="Path to save the response as JSON"
-    )
+    query_parser.add_argument("--model", "-m", default="gpt-4", help="OpenAI model to use")
+    query_parser.add_argument("--output", "-o", help="Path to save the response as JSON")
     query_parser.add_argument(
         "--max-display",
         type=int,
@@ -116,8 +106,8 @@ def main():
         print(f"Processed {len(documents)} documents")
 
         print("Creating and populating the index...")
-        from verbatim_rag.vector_stores import LocalMilvusStore
         from verbatim_rag.embedding_providers import SentenceTransformersProvider
+        from verbatim_rag.vector_stores import LocalMilvusStore
 
         # Create providers
         dense_provider = SentenceTransformersProvider(
@@ -143,9 +133,7 @@ def main():
         template_manager = TemplateManager(model=args.model)
 
         # Generate random templates
-        template_manager.generate_random_templates(
-            count=20
-        )  # Generate diverse templates
+        template_manager.generate_random_templates(count=20)  # Generate diverse templates
 
         # Save templates to file
         template_manager.save(args.output)
@@ -156,8 +144,8 @@ def main():
     elif args.command == "query":
         print(f"Loading index from: {args.index}")
         try:
-            from verbatim_rag.vector_stores import LocalMilvusStore
             from verbatim_rag.embedding_providers import SentenceTransformersProvider
+            from verbatim_rag.vector_stores import LocalMilvusStore
 
             # Create providers
             dense_provider = SentenceTransformersProvider(
@@ -174,9 +162,7 @@ def main():
             )
 
             # Create index
-            index = VerbatimIndex(
-                vector_store=vector_store, dense_provider=dense_provider
-            )
+            index = VerbatimIndex(vector_store=vector_store, dense_provider=dense_provider)
         except Exception as e:
             print(f"Error loading index: {e}")
             return

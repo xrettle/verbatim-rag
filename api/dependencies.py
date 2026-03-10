@@ -4,13 +4,13 @@ Dependency injection setup for FastAPI
 
 import logging
 from typing import Annotated
+
 from fastapi import Depends, HTTPException
-from verbatim_rag.core import VerbatimRAG
-from verbatim_core.templates import TemplateManager
-from verbatim_rag.core import LLMClient
 
 from api.config import APIConfig, get_config
 from api.services.rag_service import APIService
+from verbatim_core.templates import TemplateManager
+from verbatim_rag.core import LLMClient, VerbatimRAG
 
 logger = logging.getLogger(__name__)
 
@@ -27,33 +27,31 @@ def get_rag_instance(config: Annotated[APIConfig, Depends(get_config)]) -> Verba
 
     if _rag_instance is None:
         try:
+            from verbatim_rag.embedding_providers import SentenceTransformersProvider
             from verbatim_rag.index import VerbatimIndex
             from verbatim_rag.vector_stores import LocalMilvusStore
-            from verbatim_rag.embedding_providers import SpladeProvider
 
             llm_client = LLMClient(
-                model="gpt-4o-mini",
-                temperature=1.0,
+                model="moonshotai/kimi-k2-instruct-0905",
+                api_base="https://api.groq.com/openai/v1/",
             )
 
-            # Create providers
-            sparse_provider = SpladeProvider(
-                model_name="opensearch-project/opensearch-neural-sparse-encoding-doc-v3-distill",
+            dense_provider = SentenceTransformersProvider(
+                model_name="ibm-granite/granite-embedding-small-english-r2",
                 device="cpu",
             )
 
             # Create vector store
             vector_store = LocalMilvusStore(
                 db_path=str(config.index_path),
-                collection_name="verbatim_rag",
-                enable_dense=False,
-                enable_sparse=True,
+                collection_name="acl",
+                enable_dense=True,
+                enable_sparse=False,
+                dense_dim=dense_provider.get_dimension(),
             )
 
             # Create index
-            index = VerbatimIndex(
-                vector_store=vector_store, sparse_provider=sparse_provider
-            )
+            index = VerbatimIndex(vector_store=vector_store, dense_provider=dense_provider)
 
             # Create RAG instance with the index
             _rag_instance = VerbatimRAG(

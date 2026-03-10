@@ -8,12 +8,18 @@ not stored in document metadata to avoid redundancy.
 Users can create their own domain-specific schemas by inheriting from DocumentSchema.
 """
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
-from typing import Optional, Any, Dict
-from datetime import datetime
+from __future__ import annotations
+
 import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from verbatim_rag.document import DocumentType
+
+if TYPE_CHECKING:
+    from verbatim_rag.ingestion.document_processor import DocumentProcessor
 
 
 class DocumentSchema(BaseModel):
@@ -24,9 +30,7 @@ class DocumentSchema(BaseModel):
 
     # Core fields
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    content: str = Field(
-        ..., description="Document text content"
-    )  # For processing, not stored
+    content: str = Field(..., description="Document text content")  # For processing, not stored
 
     # Common metadata
     title: Optional[str] = Field(None, max_length=5000, description="Document title")
