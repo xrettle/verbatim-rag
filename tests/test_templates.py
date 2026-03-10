@@ -1,7 +1,6 @@
 """Tests for verbatim_core.templates (static mode + filler)."""
 
 import pytest
-
 from verbatim_core.templates.filler import TemplateFiller
 from verbatim_core.templates.manager import TemplateManager
 from verbatim_core.templates.static import StaticTemplate

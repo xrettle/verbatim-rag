@@ -2,7 +2,6 @@
 
 import pytest
 from pydantic import ValidationError
-
 from verbatim_core.models import (
     Citation,
     DocumentWithHighlights,

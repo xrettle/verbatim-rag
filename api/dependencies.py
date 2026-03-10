@@ -6,10 +6,10 @@ import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
+from verbatim_core.templates import TemplateManager
 
 from api.config import APIConfig, get_config
 from api.services.rag_service import APIService
-from verbatim_core.templates import TemplateManager
 from verbatim_rag.core import LLMClient, VerbatimRAG
 
 logger = logging.getLogger(__name__)

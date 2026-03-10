@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-
 from verbatim_core.transform import VerbatimTransform, _coerce_context_to_results
 from verbatim_core.universal_document import UniversalDocument
 

@@ -6,6 +6,7 @@ import logging
 from typing import Dict, Optional
 
 from verbatim_core.templates import TemplateManager
+
 from verbatim_rag import QueryResponse
 from verbatim_rag.core import VerbatimRAG
 

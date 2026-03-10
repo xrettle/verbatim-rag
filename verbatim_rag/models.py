@@ -3,7 +3,6 @@ Compatibility re-exports for models from verbatim_core, plus local QueryRequest.
 """
 
 from pydantic import BaseModel, Field
-
 from verbatim_core.models import (
     Citation,
     DocumentWithHighlights,
