@@ -6,17 +6,19 @@ to interleave verbatim facts contextually. Citation-only facts (beyond the displ
 limit) expand to a numbered reference token (e.g. "[6]") without verbatim text.
 """
 
-from typing import Optional, Any
 import asyncio
 import logging
+from typing import Any, Optional
+
+from verbatim_core.templates import TemplateManager
+
 from verbatim_rag.extractors import LLMSpanExtractor, SpanExtractor
 from verbatim_rag.index import VerbatimIndex
-from verbatim_rag.models import QueryResponse
-from verbatim_core.templates import TemplateManager
-from verbatim_rag.response_builder import ResponseBuilder
-from verbatim_rag.llm_client import LLMClient
-from verbatim_rag.schema import DocumentSchema
 from verbatim_rag.ingestion import schema_to_document
+from verbatim_rag.llm_client import LLMClient
+from verbatim_rag.models import QueryResponse
+from verbatim_rag.response_builder import ResponseBuilder
+from verbatim_rag.schema import DocumentSchema
 
 MARKING_SYSTEM_PROMPT = """
 You are a Q&A text extraction system. Your task is to identify and mark EXACT verbatim text spans from the provided document that is relevant to answer the user's question.
@@ -103,9 +105,7 @@ class VerbatimRAG:
 
         self.response_builder = ResponseBuilder()
 
-    def _build_short_circuit_response(
-        self, question: str, answer: str
-    ) -> QueryResponse:
+    def _build_short_circuit_response(self, question: str, answer: str) -> QueryResponse:
         cleaned = self.response_builder.clean_answer(answer or "")
         return self.response_builder.build_response(
             question=question,
@@ -167,9 +167,7 @@ class VerbatimRAG:
         :param citation_count: Number of additional citations
         :return: A template string with placeholders
         """
-        return self.template_manager.get_template(
-            question, display_spans or [], citation_count
-        )
+        return self.template_manager.get_template(question, display_spans or [], citation_count)
 
     def _rank_and_split_spans(
         self, relevant_spans: dict[str, list[str]]
@@ -205,9 +203,7 @@ class VerbatimRAG:
         :param citation_spans: Spans for citation reference only
         :return: The filled template
         """
-        return self.template_manager.fill_template(
-            template, display_spans, citation_spans
-        )
+        return self.template_manager.fill_template(template, display_spans, citation_spans)
 
     def query(
         self,
@@ -250,23 +246,17 @@ class VerbatimRAG:
 
         # Step 2: Check mode and extract accordingly
         if self.template_manager.current_mode == "structured":
-            answer, all_relevant_spans = self._process_structured(
-                question, search_results
-            )
+            answer, all_relevant_spans = self._process_structured(question, search_results)
         else:
             # Standard extraction flow
             print("Extracting relevant spans...")
             all_relevant_spans = self.extractor.extract_spans(question, search_results)
 
             print("Processing spans...")
-            display_spans, citation_spans = self._rank_and_split_spans(
-                all_relevant_spans
-            )
+            display_spans, citation_spans = self._rank_and_split_spans(all_relevant_spans)
 
             print("Generating response...")
-            answer = self.template_manager.process(
-                question, display_spans, citation_spans
-            )
+            answer = self.template_manager.process(question, display_spans, citation_spans)
 
         # Clean up and build response
         answer = self.response_builder.clean_answer(answer)
@@ -284,9 +274,7 @@ class VerbatimRAG:
 
         return response
 
-    def _process_structured(
-        self, question: str, search_results: list
-    ) -> tuple[str, dict]:
+    def _process_structured(self, question: str, search_results: list) -> tuple[str, dict]:
         """
         Process query in structured mode - template controls extraction.
 
@@ -302,9 +290,7 @@ class VerbatimRAG:
         doc_texts = [getattr(r, "text", str(r)) for r in search_results]
 
         # Structured extraction via LLM - returns {PLACEHOLDER: [{text, doc}, ...]}
-        span_map = self.llm_client.extract_structured(
-            question, template, placeholders, doc_texts
-        )
+        span_map = self.llm_client.extract_structured(question, template, placeholders, doc_texts)
 
         # Fill template with spans
         answer = strategy.fill_with_spans(span_map)
@@ -360,14 +346,10 @@ class VerbatimRAG:
         else:
             # Standard extraction flow
             print("Extracting relevant spans (async)...")
-            all_relevant_spans = await self.extractor.extract_spans_async(
-                question, search_results
-            )
+            all_relevant_spans = await self.extractor.extract_spans_async(question, search_results)
 
             print("Processing spans...")
-            display_spans, citation_spans = self._rank_and_split_spans(
-                all_relevant_spans
-            )
+            display_spans, citation_spans = self._rank_and_split_spans(all_relevant_spans)
 
             print("Generating response (async)...")
             answer = await self.template_manager.process_async(

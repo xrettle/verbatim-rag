@@ -7,9 +7,9 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from typing import Annotated, Optional, Any
+from typing import Annotated, Any, Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
 from pydantic import BaseModel, Field
@@ -22,11 +22,10 @@ if "OPENAI_API_KEY" not in os.environ:
 
 try:
     from verbatim_rag import (
-        QueryRequest,
         QueryResponse,
-        VerbatimRAG,
-        TemplateManager,
         StreamingRAG,
+        TemplateManager,
+        VerbatimRAG,
     )
 except ImportError as e:
     print(f"Error importing verbatim_rag: {e}")
@@ -34,10 +33,10 @@ except ImportError as e:
 
 from api.config import APIConfig, get_config
 from api.dependencies import (
+    check_system_ready,
     get_api_service,
     get_rag_instance,
     get_template_manager,
-    check_system_ready,
 )
 from api.services.rag_service import APIService
 
@@ -162,9 +161,7 @@ async def get_documents(
                     )
             else:
                 # Fallback: return a message indicating documents are indexed but not retrievable
-                logger.info(
-                    "Documents are indexed but document metadata retrieval not implemented"
-                )
+                logger.info("Documents are indexed but document metadata retrieval not implemented")
 
             return {"documents": documents}
         else:
@@ -279,7 +276,7 @@ async def verbatim_transform_endpoint(request: VerbatimTransformRequest):
 
 
 @app.post("/api/query/async", response_model=QueryResponse)
-async def query_async_endpoint(
+async def query_async_slash_endpoint(
     request: QueryRequestModel,
     api_service: Annotated[APIService, Depends(get_api_service)],
     _: Annotated[bool, Depends(check_system_ready)],
@@ -369,9 +366,7 @@ async def query_stream_endpoint(
                     search_params=request.search_params,
                 ):
                     stage_count += 1
-                    logger.info(
-                        f"Yielding stage {stage_count}: {stage.get('type', 'unknown')}"
-                    )
+                    logger.info(f"Yielding stage {stage_count}: {stage.get('type', 'unknown')}")
                     yield json.dumps(stage) + "\n"
 
                 if stage_count == 0:
@@ -392,9 +387,7 @@ async def query_stream_endpoint(
                 import traceback
 
                 traceback.print_exc()
-                yield (
-                    json.dumps({"type": "error", "error": str(e), "done": True}) + "\n"
-                )
+                yield (json.dumps({"type": "error", "error": str(e), "done": True}) + "\n")
 
         # Return streaming response with proper headers
         return FastAPIStreamingResponse(

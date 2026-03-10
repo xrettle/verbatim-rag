@@ -3,13 +3,13 @@ Thin compatibility re-exports for templates from verbatim_core.
 """
 
 from verbatim_core.templates import (
-    TemplateStrategy,
-    StaticTemplate,
     ContextualTemplate,
-    RandomTemplate,
     QuestionSpecificTemplate,
-    TemplateManager,
+    RandomTemplate,
+    StaticTemplate,
     TemplateFiller,
+    TemplateManager,
+    TemplateStrategy,
 )
 
 __all__ = [

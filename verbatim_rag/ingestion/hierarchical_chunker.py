@@ -7,11 +7,11 @@ Primarily designed to work with RecursiveChunker using markdown recipe.
 """
 
 import re
-from typing import List, Optional
 from dataclasses import dataclass
+from typing import List, Optional
 
 try:
-    import chonkie
+    import chonkie  # noqa: F401
 
     CHONKIE_AVAILABLE = True
 except ImportError:
@@ -88,9 +88,7 @@ class HierarchicalWrapper:
         # For each chunk, determine its heading hierarchy
         hierarchical_chunks = []
         for chunk in base_chunks:
-            heading_path = self._get_heading_path(
-                chunk.start_index, headings, chunk.text
-            )
+            heading_path = self._get_heading_path(chunk.start_index, headings, chunk.text)
 
             hierarchical_chunk = HierarchicalChunk(
                 text=chunk.text,
@@ -123,9 +121,7 @@ class HierarchicalWrapper:
             heading_text = match.group(2).strip()
             start_pos = match.start()
 
-            headings.append(
-                HeadingInfo(level=level, text=heading_text, start_pos=start_pos)
-            )
+            headings.append(HeadingInfo(level=level, text=heading_text, start_pos=start_pos))
 
         return headings
 
@@ -158,9 +154,7 @@ class HierarchicalWrapper:
 
         for heading in preceding_headings:
             # Clear any deeper levels when we encounter a heading
-            levels_to_remove = [
-                lvl for lvl in current_levels.keys() if lvl >= heading.level
-            ]
+            levels_to_remove = [lvl for lvl in current_levels.keys() if lvl >= heading.level]
             for lvl in levels_to_remove:
                 del current_levels[lvl]
 

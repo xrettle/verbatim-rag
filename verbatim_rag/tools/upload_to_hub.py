@@ -8,9 +8,8 @@ This script uses the standard HuggingFace methods to upload a model to the Hub.
 import argparse
 import os
 
-from transformers import AutoTokenizer
 from huggingface_hub import login
-
+from transformers import AutoTokenizer
 from verbatim_core.extractor_models.model import QAModel
 
 
@@ -37,7 +36,7 @@ def upload_model_to_hub(
     try:
         print(f"Loading tokenizer from {model_path}...")
         tokenizer = AutoTokenizer.from_pretrained(model_path)
-    except:
+    except Exception:
         print("Loading default ModernBERT tokenizer...")
         tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
 
@@ -49,9 +48,7 @@ def upload_model_to_hub(
         if env_token:
             login(token=env_token)
         else:
-            print(
-                "No HuggingFace token provided. Using stored credentials if available."
-            )
+            print("No HuggingFace token provided. Using stored credentials if available.")
 
     # Set model card metadata
     model_card = {
@@ -88,9 +85,7 @@ def upload_model_to_hub(
         use_auth_token=token or True,
     )
 
-    print(
-        f"Model and tokenizer uploaded successfully to https://huggingface.co/{repo_id}"
-    )
+    print(f"Model and tokenizer uploaded successfully to https://huggingface.co/{repo_id}")
     print("To use this model, you can initialize a ModelSpanExtractor with:")
     print(f"extractor = ModelSpanExtractor(model_path='{repo_id}', threshold=0.5)")
 
@@ -98,9 +93,7 @@ def upload_model_to_hub(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Upload a trained QAModel to HuggingFace Hub"
-    )
+    parser = argparse.ArgumentParser(description="Upload a trained QAModel to HuggingFace Hub")
 
     parser.add_argument(
         "--model_path",
@@ -116,12 +109,8 @@ def main():
         required=True,
         help="Repository ID on HuggingFace (username/model-name)",
     )
-    parser.add_argument(
-        "--description", "-d", type=str, help="Short description of the model"
-    )
-    parser.add_argument(
-        "--private", "-p", action="store_true", help="Make the repository private"
-    )
+    parser.add_argument("--description", "-d", type=str, help="Short description of the model")
+    parser.add_argument("--private", "-p", action="store_true", help="Make the repository private")
     parser.add_argument(
         "--token",
         "-t",

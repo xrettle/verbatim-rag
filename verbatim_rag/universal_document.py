@@ -34,9 +34,7 @@ class UniversalDocument:
             raise TypeError("UniversalDocument.from_dict expects a dict")
         content = data.get("content") or data.get("text")
         if not isinstance(content, str) or not content:
-            raise ValueError(
-                "UniversalDocument requires 'content' (or 'text') as non-empty string"
-            )
+            raise ValueError("UniversalDocument requires 'content' (or 'text') as non-empty string")
         return cls(
             content=content,
             title=data.get("title", ""),

@@ -9,15 +9,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict
 
-from verbatim_rag.schema import DocumentSchema
+from verbatim_rag.chunker_providers import MarkdownChunkerProvider
 from verbatim_rag.document import (
-    Document,
-    DocumentType,
     Chunk,
     ChunkType,
+    Document,
+    DocumentType,
     ProcessedChunk,
 )
-from verbatim_rag.chunker_providers import MarkdownChunkerProvider
+from verbatim_rag.schema import DocumentSchema
 
 
 def schema_to_document(
@@ -26,9 +26,7 @@ def schema_to_document(
 ) -> Document:
     """Convert a DocumentSchema into a pre-chunked Document using chunker providers."""
     # Flatten metadata (exclude core fields), convert datetimes to ISO strings
-    base_metadata = schema.model_dump(
-        exclude={"id", "title", "source", "content", "metadata"}
-    )
+    base_metadata = schema.model_dump(exclude={"id", "title", "source", "content", "metadata"})
     custom_metadata = schema.metadata or {}
     flattened: Dict[str, Any] = {**base_metadata, **custom_metadata}
     for k, v in list(flattened.items()):
@@ -60,9 +58,7 @@ def schema_to_document(
             metadata=document.metadata.copy(),
         )
 
-        processed = ProcessedChunk(
-            chunk_id=doc_chunk.id, enhanced_content=enhanced_content
-        )
+        processed = ProcessedChunk(chunk_id=doc_chunk.id, enhanced_content=enhanced_content)
         doc_chunk.add_processed_chunk(processed)
         document.add_chunk(doc_chunk)
 

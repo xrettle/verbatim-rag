@@ -10,12 +10,13 @@ Usage:
 """
 
 import asyncio
-from verbatim_rag import VerbatimRAG, VerbatimIndex, Document
-from verbatim_rag.verbatim_doc import VerbatimDOC
-from verbatim_rag.document import DocumentType, Chunk, ProcessedChunk, ChunkType
-from verbatim_rag.vector_stores import LocalMilvusStore
-from verbatim_rag.embedding_providers import SentenceTransformersProvider
+
+from verbatim_rag import Document, VerbatimIndex, VerbatimRAG
 from verbatim_rag.core import LLMClient
+from verbatim_rag.document import Chunk, ChunkType, DocumentType, ProcessedChunk
+from verbatim_rag.embedding_providers import SentenceTransformersProvider
+from verbatim_rag.vector_stores import LocalMilvusStore
+from verbatim_rag.verbatim_doc import VerbatimDOC
 
 
 async def demo_verbatim_doc():
@@ -147,9 +148,7 @@ The system achieved [!query=what accuracy was achieved] showing significant adva
 
     # Step 5: Interactive mode demo
     print("\n🎯 Interactive Mode Demo:")
-    print(
-        "In interactive mode, you can review and edit each query result before finalizing."
-    )
+    print("In interactive mode, you can review and edit each query result before finalizing.")
 
     try:
         original_text, query_results = await doc_processor.process_interactive(template)

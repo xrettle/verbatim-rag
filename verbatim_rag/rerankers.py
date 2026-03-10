@@ -18,9 +18,7 @@ class Reranker(ABC):
     def rerank(self, question: str, results: List[SearchResult]) -> List[SearchResult]:
         raise NotImplementedError
 
-    async def rerank_async(
-        self, question: str, results: List[SearchResult]
-    ) -> List[SearchResult]:
+    async def rerank_async(self, question: str, results: List[SearchResult]) -> List[SearchResult]:
         return await asyncio.to_thread(self.rerank, question, results)
 
 

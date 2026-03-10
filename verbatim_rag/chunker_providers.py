@@ -5,9 +5,9 @@ Follows the same provider pattern as embedding_providers and vector_stores.
 All chunkers implement the ChunkerProvider interface.
 """
 
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Dict, Any
 import re
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Tuple
 
 
 class ChunkerProvider(ABC):
@@ -220,9 +220,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
                 idxs.append(i + 1)
         return idxs
 
-    def _span_of_lines(
-        self, starts: List[int], a: int, b_excl: int, n: int
-    ) -> Tuple[int, int]:
+    def _span_of_lines(self, starts: List[int], a: int, b_excl: int, n: int) -> Tuple[int, int]:
         """Get character span from line a to line b (exclusive)."""
         start = starts[a]
         end = starts[b_excl] if b_excl < len(starts) else n
@@ -267,9 +265,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
                     between = text[table_end:cap_start]
                     if between.strip() == "":
                         # Check if there's a table after this caption
-                        table_after_caption = any(
-                            t_start > cap_end for t_start, t_end in tables
-                        )
+                        table_after_caption = any(t_start > cap_end for t_start, t_end in tables)
                         # Only attach caption-after if no table follows it
                         if not table_after_caption:
                             region_end = cap_end
@@ -285,9 +281,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
         protected.sort()
         return protected
 
-    def _combine_chunks(
-        self, first: Dict[str, Any], second: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _combine_chunks(self, first: Dict[str, Any], second: Dict[str, Any]) -> Dict[str, Any]:
         """Combine two adjacent chunks, keeping metadata from the first."""
         return {
             "raw_chunk": first["raw_chunk"] + second["raw_chunk"],
@@ -315,9 +309,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
                 merged_chunk = self._combine_chunks(chunk, chunks[i + 1])
 
                 # Check if merged result is still tiny - if so, queue for next iteration
-                if len(merged_chunk["raw_chunk"]) < self.min_chunk_size and i + 2 < len(
-                    chunks
-                ):
+                if len(merged_chunk["raw_chunk"]) < self.min_chunk_size and i + 2 < len(chunks):
                     chunks[i + 1] = merged_chunk
                     i += 1
                 else:
@@ -389,8 +381,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
             ) or not self._position_in_protected_region(abs_end - 1, protected_regions):
                 # Additional check: don't split if we're completely inside a single region
                 inside_same_region = any(
-                    start <= abs_start and abs_end <= end
-                    for start, end in protected_regions
+                    start <= abs_start and abs_end <= end for start, end in protected_regions
                 )
                 if not inside_same_region:
                     splits.append(match.start())
@@ -438,9 +429,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
 
         return result
 
-    def _make_sub_chunk(
-        self, raw: str, original_chunk: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _make_sub_chunk(self, raw: str, original_chunk: Dict[str, Any]) -> Dict[str, Any]:
         """Create a sub-chunk with proper metadata."""
         return {
             "raw_chunk": raw,
@@ -452,9 +441,7 @@ class MarkdownChunkerProvider(ChunkerProvider):
             "end": original_chunk.get("end", 0),
         }
 
-    def _make_enhanced_chunk(
-        self, raw_chunk: str, original_chunk: Dict[str, Any]
-    ) -> str:
+    def _make_enhanced_chunk(self, raw_chunk: str, original_chunk: Dict[str, Any]) -> str:
         """Create enhanced chunk by adding ancestor headers to raw chunk."""
         header_path = original_chunk.get("header_path", [])
 
@@ -504,8 +491,7 @@ class ChonkieChunkerProvider(ChunkerProvider):
             import chonkie
         except ImportError as e:
             raise ImportError(
-                "ChonkieChunkerProvider requires chonkie. "
-                "Install with: pip install chonkie"
+                "ChonkieChunkerProvider requires chonkie. Install with: pip install chonkie"
             ) from e
 
         chunker = chonkie.RecursiveChunker.from_recipe(self.recipe)

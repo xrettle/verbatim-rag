@@ -29,6 +29,37 @@ With this approach, **the whole RAG pipeline can be run without any usage of LLM
 pip install verbatim-rag
 ```
 
+For local development:
+
+```bash
+pip install -e packages/core/
+pip install -e .
+```
+
+## Lightweight Core
+
+If you only need the reusable verbatim core without the full RAG pipeline (no torch, transformers, or Milvus):
+
+```bash
+pip install verbatim-core
+```
+
+```python
+from verbatim_core import VerbatimTransform
+
+vt = VerbatimTransform()
+response = vt.transform(
+    question="What is the main finding?",
+    context=[
+        {"content": "The study found that X leads to Y.", "title": "Paper A"},
+        {"content": "Results show Z is significant.", "title": "Paper B"},
+    ],
+)
+print(response.answer)
+```
+
+Dependencies: only `openai` and `pydantic`.
+
 ## Quick Start
 
 ```python

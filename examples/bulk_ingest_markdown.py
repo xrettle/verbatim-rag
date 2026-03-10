@@ -27,10 +27,10 @@ from typing import List
 from tqdm import tqdm
 
 from verbatim_rag.document import DocumentType
+from verbatim_rag.embedding_providers import SpladeProvider
 from verbatim_rag.index import VerbatimIndex
 from verbatim_rag.schema import DocumentSchema
-from verbatim_rag.vector_stores import LocalMilvusStore, CloudMilvusStore
-from verbatim_rag.embedding_providers import SpladeProvider
+from verbatim_rag.vector_stores import CloudMilvusStore, LocalMilvusStore
 
 
 def discover_markdown_files(md_dir: Path) -> List[Path]:
@@ -121,9 +121,7 @@ def main() -> None:
         default=os.getenv("VERBATIM_COLLECTION_NAME", "verbatim_rag"),
         help="Collection name",
     )
-    parser.add_argument(
-        "--uri", default=os.getenv("VERBATIM_MILVUS_URI"), help="Milvus Cloud URI"
-    )
+    parser.add_argument("--uri", default=os.getenv("VERBATIM_MILVUS_URI"), help="Milvus Cloud URI")
     parser.add_argument(
         "--api-key",
         default=os.getenv("VERBATIM_MILVUS_API_KEY"),
@@ -150,9 +148,7 @@ def main() -> None:
         print("No Markdown files found. Nothing to ingest.")
         return
 
-    print(
-        f"Initializing index (backend={args.vector_db}, collection={args.collection_name})..."
-    )
+    print(f"Initializing index (backend={args.vector_db}, collection={args.collection_name})...")
     index = build_index(
         vector_db=args.vector_db,
         collection_name=args.collection_name,

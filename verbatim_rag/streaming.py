@@ -3,13 +3,14 @@ Streaming interface for the Verbatim RAG system
 Provides structured streaming of RAG processing stages
 """
 
-from typing import AsyncGenerator, Dict, Any, List, Optional
 import asyncio
 import time
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
+from .core import VerbatimRAG
 from .models import (
     DocumentWithHighlights,
 )
-from .core import VerbatimRAG
 
 
 class StreamingRAG:
@@ -141,9 +142,7 @@ class StreamingRAG:
 
             # Step 3: Generate answer using enhanced pipeline with new architecture
             # Rank spans and split into display vs citation-only
-            display_spans, citation_spans = self.rag._rank_and_split_spans(
-                relevant_spans
-            )
+            display_spans, citation_spans = self.rag._rank_and_split_spans(relevant_spans)
 
             # Generate and fill template using template manager (async)
             try:

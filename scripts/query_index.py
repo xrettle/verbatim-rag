@@ -1,11 +1,10 @@
 import argparse
 import logging
 
-
 from verbatim_rag import VerbatimIndex, VerbatimRAG
+from verbatim_rag.core import LLMClient
 from verbatim_rag.embedding_providers import SentenceTransformersProvider
 from verbatim_rag.vector_stores import LocalMilvusStore
-from verbatim_rag.core import LLMClient
 
 
 def get_args():

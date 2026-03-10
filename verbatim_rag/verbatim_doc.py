@@ -16,11 +16,11 @@ Usage:
     # response.structured_answer.citations = global citations with doc_index
 """
 
-import re
 import asyncio
+import re
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Tuple, Union, Optional, AsyncGenerator
 from pathlib import Path
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 from verbatim_core.models import QueryResponse
 
@@ -54,9 +54,7 @@ class QueryResult:
 
     query: Query
     result: str  # Formatted result for display
-    spans: List[SpanWithDoc] = field(
-        default_factory=list
-    )  # Raw spans with doc attribution
+    spans: List[SpanWithDoc] = field(default_factory=list)  # Raw spans with doc attribution
     docs: List[Any] = field(default_factory=list)  # Source documents for this query
     alternatives: List[str] = field(default_factory=list)  # For interactive mode
     approved: bool = False
@@ -81,9 +79,7 @@ class Parser:
                         params[key.strip()] = self._parse_value(value.strip())
 
             queries.append(
-                Query(
-                    text=query_text, start=match.start(), end=match.end(), params=params
-                )
+                Query(text=query_text, start=match.start(), end=match.end(), params=params)
             )
         return queries
 
@@ -122,15 +118,11 @@ class Processor:
         except Exception as e:
             return QueryResult(query=query, result=f"[Error: {str(e)}]")
 
-    async def process_queries(
-        self, queries: List[Query], template: str = ""
-    ) -> List[QueryResult]:
+    async def process_queries(self, queries: List[Query], template: str = "") -> List[QueryResult]:
         tasks = [self.process_query(query, template) for query in queries]
         return await asyncio.gather(*tasks)
 
-    async def _execute_query_raw(
-        self, question: str
-    ) -> Tuple[List[SpanWithDoc], List[Any]]:
+    async def _execute_query_raw(self, question: str) -> Tuple[List[SpanWithDoc], List[Any]]:
         """
         Execute query and return raw spans with document attribution.
 
@@ -148,15 +140,11 @@ class Processor:
             doc_text = getattr(doc, "text", "")
             doc_spans = spans_dict.get(doc_text, [])
             for span_text in doc_spans:
-                spans_with_docs.append(
-                    SpanWithDoc(text=span_text, doc_index=i, doc_text=doc_text)
-                )
+                spans_with_docs.append(SpanWithDoc(text=span_text, doc_index=i, doc_text=doc_text))
 
         return spans_with_docs, docs
 
-    def _format_spans_local(
-        self, spans: List[SpanWithDoc], params: Dict[str, Any]
-    ) -> str:
+    def _format_spans_local(self, spans: List[SpanWithDoc], params: Dict[str, Any]) -> str:
         """Format spans with local numbering (for preview/interactive mode)."""
         if not spans:
             return "No relevant information found."
@@ -212,11 +200,7 @@ class Replacer:
 
         for result in sorted_results:
             if result.approved:
-                text = (
-                    text[: result.query.start]
-                    + result.result
-                    + text[result.query.end :]
-                )
+                text = text[: result.query.start] + result.result + text[result.query.end :]
 
         return text
 
@@ -349,9 +333,7 @@ class VerbatimDOC:
             "done": True,
         }
 
-    def _build_response(
-        self, template: str, results: List[QueryResult]
-    ) -> QueryResponse:
+    def _build_response(self, template: str, results: List[QueryResult]) -> QueryResponse:
         """
         Build QueryResponse with global citation numbering.
 
@@ -362,9 +344,9 @@ class VerbatimDOC:
         :return: QueryResponse with filled answer and citations
         """
         from verbatim_core.models import (
+            Citation,
             DocumentWithHighlights,
             Highlight,
-            Citation,
             StructuredAnswer,
         )
 
@@ -441,9 +423,7 @@ class VerbatimDOC:
                 )
             )
 
-        structured_answer = StructuredAnswer(
-            text=filled_template, citations=all_citations
-        )
+        structured_answer = StructuredAnswer(text=filled_template, citations=all_citations)
 
         return QueryResponse(
             question="[VerbatimDOC]",
@@ -489,9 +469,7 @@ class VerbatimDOC:
             replacement = self._format_spans_global(
                 result.spans, start_num, doc_text_to_global_idx, result.query.params
             )
-            filled = (
-                filled[: result.query.start] + replacement + filled[result.query.end :]
-            )
+            filled = filled[: result.query.start] + replacement + filled[result.query.end :]
 
         return filled
 

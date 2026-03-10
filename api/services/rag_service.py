@@ -3,11 +3,12 @@ RAG service implementation for the API layer
 """
 
 import logging
-from typing import Optional, Dict
+from typing import Dict, Optional
 
-from verbatim_rag.core import VerbatimRAG
 from verbatim_core.templates import TemplateManager
+
 from verbatim_rag import QueryResponse
+from verbatim_rag.core import VerbatimRAG
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,7 @@ class APIService:
         """Execute a query through the RAG system"""
         try:
             # Use the RAG system to process the query
-            response = self.rag.query(
-                question, k=k, hybrid_weights=hybrid_weights, rrf_k=rrf_k
-            )
+            response = self.rag.query(question, k=k, hybrid_weights=hybrid_weights, rrf_k=rrf_k)
             return response
         except Exception as e:
             logger.error(f"Query execution failed: {e}")

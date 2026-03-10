@@ -3,22 +3,22 @@ Unified index class for the Verbatim RAG system.
 """
 
 import logging
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from typing import List, Optional, Dict, Any, Union, Tuple, Iterable
 from tqdm import tqdm
-from verbatim_rag.document import Document
-from verbatim_rag.schema import DocumentSchema
+
+from verbatim_rag.chunker_providers import ChunkerProvider, MarkdownChunkerProvider
+from verbatim_rag.document import Document, DocumentType
 from verbatim_rag.embedding_providers import (
     DenseEmbeddingProvider,
     SparseEmbeddingProvider,
 )
+from verbatim_rag.schema import DocumentSchema
 from verbatim_rag.vector_stores import (
-    VectorStore,
     CloudMilvusStore,
     SearchResult,
+    VectorStore,
 )
-from verbatim_rag.document import DocumentType
-from verbatim_rag.chunker_providers import ChunkerProvider, MarkdownChunkerProvider
 
 
 class VerbatimIndex:
@@ -86,9 +86,7 @@ class VerbatimIndex:
         from datetime import datetime
 
         # Extract known schema fields (exclude core document fields)
-        base_metadata = doc.model_dump(
-            exclude={"id", "title", "source", "content", "metadata"}
-        )
+        base_metadata = doc.model_dump(exclude={"id", "title", "source", "content", "metadata"})
 
         # Merge with custom metadata from metadata field
         custom_metadata = doc.metadata or {}
@@ -127,7 +125,7 @@ class VerbatimIndex:
             metadata=flattened_metadata,
         )
 
-    def _chunk_document(self, doc: Document) -> List[Tuple["Chunk", "ProcessedChunk"]]:
+    def _chunk_document(self, doc: Document) -> List[Tuple[Any, Any]]:
         """
         Chunk a Document into Chunk and ProcessedChunk objects.
 
@@ -199,9 +197,7 @@ class VerbatimIndex:
 
         return "\n".join(parts)
 
-    def _generate_embeddings(
-        self, texts: List[str]
-    ) -> Tuple[Optional[List], Optional[List]]:
+    def _generate_embeddings(self, texts: List[str]) -> Tuple[Optional[List], Optional[List]]:
         """
         Generate embeddings for a list of texts using batch processing.
 
@@ -226,7 +222,7 @@ class VerbatimIndex:
 
         return dense_embeddings, sparse_embeddings
 
-    def _prepare_chunk_metadata(self, doc: Document, chunk: "Chunk") -> Dict[str, Any]:
+    def _prepare_chunk_metadata(self, doc: Document, chunk: Any) -> Dict[str, Any]:
         """
         Prepare metadata for a chunk to be stored in vector store.
 
@@ -364,9 +360,7 @@ class VerbatimIndex:
         def flush_chunks():
             if not chunk_ids:
                 return
-            dense_embeddings, sparse_embeddings = self._generate_embeddings(
-                chunk_enhanced_texts
-            )
+            dense_embeddings, sparse_embeddings = self._generate_embeddings(chunk_enhanced_texts)
             self._store_chunks(
                 ids=chunk_ids,
                 texts=chunk_texts,
@@ -726,9 +720,7 @@ class VerbatimIndex:
 
         return unique_docs
 
-    def get_chunks_by_document(
-        self, document_id: str, limit: int = 100
-    ) -> List[SearchResult]:
+    def get_chunks_by_document(self, document_id: str, limit: int = 100) -> List[SearchResult]:
         """
         Get all chunks for a specific document.
 
@@ -781,9 +773,7 @@ class VerbatimIndex:
                 {
                     "id": chunk.id,
                     "text_preview": (
-                        chunk.text[:100] + "..."
-                        if len(chunk.text) > 100
-                        else chunk.text
+                        chunk.text[:100] + "..." if len(chunk.text) > 100 else chunk.text
                     ),
                     "document_id": chunk.metadata.get("document_id"),
                     "chunk_number": chunk.metadata.get("chunk_number"),

@@ -2,16 +2,17 @@
 Examples for using the RAG-agnostic VerbatimTransform and providers.
 """
 
-from verbatim_rag import VerbatimIndex, VerbatimRAG
 from verbatim_rag import (
-    VerbatimTransform,
     IndexProvider,
+    VerbatimIndex,
+    VerbatimRAG,
     VerbatimRAGProvider,
+    VerbatimTransform,
     verbatim_query,
 )
+from verbatim_rag.embedding_providers import SpladeProvider
 from verbatim_rag.schema import DocumentSchema
 from verbatim_rag.vector_stores import LocalMilvusStore
-from verbatim_rag.embedding_providers import SpladeProvider
 
 
 def main():

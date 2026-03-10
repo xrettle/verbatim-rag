@@ -6,8 +6,8 @@ import logging
 from typing import List, Optional
 
 from .base import SearchResult
-from .milvus_base import BaseMilvusStore
 from .hybrid_search import convert_hits_to_results
+from .milvus_base import BaseMilvusStore
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class CloudMilvusStore(BaseMilvusStore):
     def _setup_client(self):
         """Initialize Cloud Milvus client and create collections."""
         try:
-            from pymilvus import MilvusClient, DataType
+            from pymilvus import DataType, MilvusClient
 
             if self.token:
                 self.client = MilvusClient(uri=self.uri, token=self.token)
@@ -68,9 +68,7 @@ class CloudMilvusStore(BaseMilvusStore):
 
             # Create main chunks collection if missing
             if not self.client.has_collection(collection_name=self.collection_name):
-                schema = self.client.create_schema(
-                    auto_id=False, enable_dynamic_field=True
-                )
+                schema = self.client.create_schema(auto_id=False, enable_dynamic_field=True)
 
                 schema.add_field(
                     field_name="id",
@@ -110,9 +108,7 @@ class CloudMilvusStore(BaseMilvusStore):
                 if self.enable_full_text:
                     self._add_bm25_to_schema(schema, DataType)
 
-                self.client.create_collection(
-                    collection_name=self.collection_name, schema=schema
-                )
+                self.client.create_collection(collection_name=self.collection_name, schema=schema)
 
                 # Create indexes
                 index_params = self.client.prepare_index_params()
@@ -145,16 +141,12 @@ class CloudMilvusStore(BaseMilvusStore):
                     self.client.load_collection(collection_name=self.collection_name)
                     logger.info(f"Loaded collection: {self.collection_name}")
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to load collection {self.collection_name}: {e}"
-                    )
+                    logger.warning(f"Failed to load collection {self.collection_name}: {e}")
 
                 logger.info(f"Created cloud Milvus collection: {self.collection_name}")
 
             # Create documents collection
-            if not self.client.has_collection(
-                collection_name=self.documents_collection_name
-            ):
+            if not self.client.has_collection(collection_name=self.documents_collection_name):
                 self._create_documents_collection()
 
             logger.info("Connected to Milvus Cloud via MilvusClient")
@@ -201,9 +193,7 @@ class CloudMilvusStore(BaseMilvusStore):
                 },
             )
         except Exception as e:
-            logger.warning(
-                f"Failed to create BM25 index: {e}. Full text search may not work."
-            )
+            logger.warning(f"Failed to create BM25 index: {e}. Full text search may not work.")
             self.enable_full_text = False
 
     def _create_documents_collection(self):
@@ -218,23 +208,13 @@ class CloudMilvusStore(BaseMilvusStore):
             is_primary=True,
             max_length=100,
         )
-        doc_schema.add_field(
-            field_name="title", datatype=DataType.VARCHAR, max_length=4096
-        )
-        doc_schema.add_field(
-            field_name="source", datatype=DataType.VARCHAR, max_length=4096
-        )
-        doc_schema.add_field(
-            field_name="content_type", datatype=DataType.VARCHAR, max_length=50
-        )
-        doc_schema.add_field(
-            field_name="raw_content", datatype=DataType.VARCHAR, max_length=65535
-        )
+        doc_schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=4096)
+        doc_schema.add_field(field_name="source", datatype=DataType.VARCHAR, max_length=4096)
+        doc_schema.add_field(field_name="content_type", datatype=DataType.VARCHAR, max_length=50)
+        doc_schema.add_field(field_name="raw_content", datatype=DataType.VARCHAR, max_length=65535)
         doc_schema.add_field(field_name="metadata", datatype=DataType.JSON)
         # Cloud Milvus requires a vector field in all collections
-        doc_schema.add_field(
-            field_name="dummy_vector", datatype=DataType.FLOAT_VECTOR, dim=2
-        )
+        doc_schema.add_field(field_name="dummy_vector", datatype=DataType.FLOAT_VECTOR, dim=2)
 
         self.client.create_collection(
             collection_name=self.documents_collection_name, schema=doc_schema
@@ -256,17 +236,13 @@ class CloudMilvusStore(BaseMilvusStore):
         # Load the documents collection into memory
         try:
             self.client.load_collection(collection_name=self.documents_collection_name)
-            logger.info(
-                f"Loaded documents collection: {self.documents_collection_name}"
-            )
+            logger.info(f"Loaded documents collection: {self.documents_collection_name}")
         except Exception as e:
             logger.warning(
                 f"Failed to load documents collection {self.documents_collection_name}: {e}"
             )
 
-        logger.info(
-            f"Created cloud Milvus documents collection: {self.documents_collection_name}"
-        )
+        logger.info(f"Created cloud Milvus documents collection: {self.documents_collection_name}")
 
     def _full_text_search(
         self, text_query: str, top_k: int, filter: Optional[str] = None
