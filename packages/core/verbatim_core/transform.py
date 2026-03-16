@@ -62,12 +62,20 @@ class VerbatimTransform:
         max_display_spans: int = 5,
         extraction_mode: str = "auto",
         template_mode: str = "contextual",
+        span_match_mode: str = "exact",
+        fuzzy_threshold: float = 0.8,
+        extraction_prompt: str | None = None,
+        system_prompt: str | None = None,
     ):
         self.llm_client = llm_client or LLMClient()
         self.extractor = extractor or LLMSpanExtractor(
             llm_client=self.llm_client,
             extraction_mode=extraction_mode,
             max_display_spans=max_display_spans,
+            span_match_mode=span_match_mode,
+            fuzzy_threshold=fuzzy_threshold,
+            extraction_prompt=extraction_prompt,
+            system_prompt=system_prompt,
         )
         self.template_manager = template_manager or TemplateManager(
             llm_client=self.llm_client, default_mode=template_mode

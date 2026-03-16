@@ -13,6 +13,8 @@ vt = VerbatimTransform(
     template_mode="contextual",  # or "static"
     extraction_mode="auto",      # "auto", "batch", or "individual"
     max_display_spans=5,
+    span_match_mode="exact",     # "exact" or "fuzzy"
+    fuzzy_threshold=0.8,         # for fuzzy mode
 )
 
 response = vt.transform(
@@ -44,11 +46,106 @@ extractor = LLMSpanExtractor(
     llm_client=client,
     extraction_mode="auto",  # batch for small inputs, individual for large
     batch_size=5,
+    span_match_mode="fuzzy",     # "exact" or "fuzzy"
+    fuzzy_threshold=0.8,
 )
 
 spans = extractor.extract_spans("What is X?", search_results)
 # Returns: {"doc text": ["verbatim span 1", "verbatim span 2"], ...}
 ```
+
+## Fuzzy Span Matching
+
+By default, extracted spans must match the source document exactly (substring match). For documents with OCR artifacts, encoding issues (e.g. corrupted umlauts), or minor formatting differences, enable fuzzy matching:
+
+```python
+vt = VerbatimTransform(
+    span_match_mode="fuzzy",
+    fuzzy_threshold=0.8,  # 0-1, higher = stricter matching
+)
+```
+
+Or directly on the extractor:
+
+```python
+extractor = LLMSpanExtractor(
+    llm_client=client,
+    span_match_mode="fuzzy",
+    fuzzy_threshold=0.8,
+)
+```
+
+In fuzzy mode:
+
+- Exact matches are tried first (fast path)
+- If no exact match, `rapidfuzz` finds the best fuzzy alignment in the document
+- The returned span is the **actual text from the document** (not the LLM's version), ensuring correct character offsets for highlighting
+- Spans below the threshold are rejected with a warning
+
+This is particularly useful for medical documents, scanned PDFs, or any text that may have been through lossy format conversions.
+
+## Custom Extraction Prompts
+
+You can provide a custom extraction prompt to control what the LLM extracts. Prompts use [Jinja2](https://jinja.palletsprojects.com/) syntax with `{{ question }}` and `{{ documents }}` variables:
+
+```python
+custom_prompt = """Extract key findings from the documents.
+
+Question: {{ question }}
+
+Documents:
+{{ documents }}
+
+Return a JSON object mapping doc IDs to span arrays."""
+
+extractor = LLMSpanExtractor(
+    llm_client=client,
+    extraction_prompt=custom_prompt,
+)
+```
+
+You can also pass an optional `system_prompt` to set the LLM's persona:
+
+```python
+extractor = LLMSpanExtractor(
+    llm_client=client,
+    extraction_prompt=custom_prompt,
+    system_prompt="You are a medical expert extracting clinical information.",
+)
+```
+
+These parameters are also available on `VerbatimTransform`:
+
+```python
+vt = VerbatimTransform(
+    extraction_prompt=custom_prompt,
+    system_prompt="You are a medical expert.",
+    span_match_mode="fuzzy",
+)
+```
+
+## Prompt Bank
+
+Verbatim-core ships with built-in prompt templates that can be loaded, inspected, and used as starting points for custom prompts:
+
+```python
+from verbatim_core.prompts import load_prompt, list_prompts
+
+# List available prompts
+list_prompts()
+# ['extraction/default', 'extraction/structured', 'template/aggregate',
+#  'template/fallback', 'template/per_fact']
+
+# Load a prompt template (raw, unrendered)
+template = load_prompt("extraction/default")
+
+# Load and render with variables
+rendered = load_prompt("extraction/default", question="What is X?", documents="...")
+```
+
+Prompts are Jinja2 templates supporting variables (`{{ var }}`), conditionals (`{% if %}...{% endif %}`), and any other Jinja2 features. Literal braces (e.g. in JSON examples) pass through without escaping.
+
+All built-in prompts (`LLMClient` extraction, template generation, fallback) load from the prompt bank -- no prompts are hardcoded in Python code.
 
 ## Template System
 
@@ -115,5 +212,15 @@ from verbatim_core.llm_client import LLMClient
 client = LLMClient(
     model="my-model",
     api_base="http://localhost:8080/v1",
+)
+```
+
+The `complete()` method also supports an optional `system_prompt`:
+
+```python
+response = client.complete(
+    prompt="Extract spans from this text...",
+    json_mode=True,
+    system_prompt="You are a helpful assistant.",
 )
 ```

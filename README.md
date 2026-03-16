@@ -58,7 +58,7 @@ response = vt.transform(
 print(response.answer)
 ```
 
-Dependencies: only `openai` and `pydantic`.
+Dependencies: only `openai`, `pydantic`, and `rapidfuzz`.
 
 ## Quick Start
 

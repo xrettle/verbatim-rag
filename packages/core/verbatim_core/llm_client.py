@@ -6,8 +6,11 @@ LLM calls, with specialized methods for span extraction and template generation.
 """
 
 import json
+import logging
 import os
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     import openai
@@ -44,7 +47,11 @@ class LLMClient:
         self.async_client = openai.AsyncOpenAI(base_url=api_base, api_key=self.api_key)
 
     def complete(
-        self, prompt: str, json_mode: bool = False, temperature: Optional[float] = None
+        self,
+        prompt: str,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        system_prompt: str | None = None,
     ) -> str:
         """
         Synchronous text completion.
@@ -52,9 +59,13 @@ class LLMClient:
         :param prompt: The prompt to send
         :param json_mode: Whether to request JSON output format
         :param temperature: Override default temperature
+        :param system_prompt: Optional system message to prepend
         :return: The completion text
         """
-        messages = [{"role": "user", "content": prompt}]
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
         kwargs = {
             "model": self.model,
             "messages": messages,
@@ -68,7 +79,11 @@ class LLMClient:
         return response.choices[0].message.content
 
     async def complete_async(
-        self, prompt: str, json_mode: bool = False, temperature: Optional[float] = None
+        self,
+        prompt: str,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        system_prompt: str | None = None,
     ) -> str:
         """
         Asynchronous text completion.
@@ -76,9 +91,13 @@ class LLMClient:
         :param prompt: The prompt to send
         :param json_mode: Whether to request JSON output format
         :param temperature: Override default temperature
+        :param system_prompt: Optional system message to prepend
         :return: The completion text
         """
-        messages = [{"role": "user", "content": prompt}]
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
         kwargs = {
             "model": self.model,
             "messages": messages,
@@ -104,7 +123,7 @@ class LLMClient:
             response = self.complete(prompt, json_mode=True)
             return json.loads(response)
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Span extraction failed: {e}")
+            logger.warning("Span extraction failed: %s", e)
             # Return empty results for all documents on failure
             return {doc_id: [] for doc_id in documents.keys()}
 
@@ -123,7 +142,7 @@ class LLMClient:
             response = await self.complete_async(prompt, json_mode=True)
             return json.loads(response)
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Async span extraction failed: {e}")
+            logger.warning("Async span extraction failed: %s", e)
             return {doc_id: [] for doc_id in documents.keys()}
 
     def extract_structured(
@@ -149,7 +168,7 @@ class LLMClient:
             response = self.complete(prompt, json_mode=True)
             return self._normalize_structured_response(json.loads(response), placeholders)
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Structured extraction failed: {e}")
+            logger.warning("Structured extraction failed: %s", e)
             return {name: [] for name in placeholders.keys()}
 
     async def extract_structured_async(
@@ -175,7 +194,7 @@ class LLMClient:
             response = await self.complete_async(prompt, json_mode=True)
             return self._normalize_structured_response(json.loads(response), placeholders)
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Structured extraction failed: {e}")
+            logger.warning("Structured extraction failed: %s", e)
             return {name: [] for name in placeholders.keys()}
 
     def _normalize_structured_response(
@@ -208,34 +227,18 @@ class LLMClient:
         documents: List[str],
     ) -> str:
         """Build prompt for structured extraction with document attribution."""
+        from .prompts import load_prompt
+
         placeholder_spec = "\n".join(f"- {name}: {hint}" for name, hint in placeholders.items())
         docs_text = "\n\n---\n\n".join(f"[Document {i}]\n{doc}" for i, doc in enumerate(documents))
 
-        return f"""Extract verbatim spans from the documents for each placeholder in the template.
-
-Question: {question}
-
-Template to fill:
-{template}
-
-Placeholders to extract for:
-{placeholder_spec}
-
-Documents:
-{docs_text}
-
-Instructions:
-1. For each placeholder, find EXACT verbatim quotes from the documents
-2. Copy text exactly - no paraphrasing or modification
-3. For each span, include which document it came from (0-indexed)
-4. Return a JSON object mapping placeholder names to arrays of objects with "text" and "doc" fields
-5. If no relevant information for a placeholder, use an empty array
-
-Return ONLY valid JSON like:
-{{
-  "METHODOLOGY": [{{"text": "exact quote about methods...", "doc": 0}}],
-  "RESULTS": [{{"text": "exact quote about results...", "doc": 1}}]
-}}"""
+        return load_prompt(
+            "extraction/structured",
+            question=question,
+            template=template,
+            placeholder_spec=placeholder_spec,
+            docs_text=docs_text,
+        )
 
     def generate_template(
         self,
@@ -261,7 +264,7 @@ Return ONLY valid JSON like:
         try:
             return self.complete(prompt, temperature=self.temperature)
         except Exception as e:
-            print(f"Template generation failed: {e}")
+            logger.error("Template generation failed: %s", e)
             return self._fallback_template(citation_count > 0)
 
     async def generate_template_async(
@@ -288,128 +291,60 @@ Return ONLY valid JSON like:
         try:
             return await self.complete_async(prompt, temperature=self.temperature)
         except Exception as e:
-            print(f"Async template generation failed: {e}")
+            logger.error("Async template generation failed: %s", e)
             return self._fallback_template(citation_count > 0)
 
     def _build_extraction_prompt(self, question: str, documents: Dict[str, str]) -> str:
         """Build the prompt for batch span extraction."""
-        return f"""Extract EXACT verbatim text spans from multiple documents that answer the question.
+        from .prompts import load_prompt
 
-# Rules
-1. Extract **only** text that explicitly addresses the question
-2. Never paraphrase, modify, or add to the original text
-3. Preserve original wording, capitalization, and punctuation
-4. Order spans within each document by relevance - MOST RELEVANT FIRST
-5. Include complete sentences or paragraphs for context
-
-# Output Format
-Return a JSON object mapping document IDs to span arrays ordered by relevance:
-{{
-  "doc_0": ["most relevant span", "next most relevant span"],
-  "doc_1": ["most relevant from doc 1"],
-  "doc_2": []
-}}
-
-If no relevant information in a document, use empty array.
-
-# Your Task
-Question: {question}
-
-Documents:
-{json.dumps(documents, indent=2)}
-
-Extract verbatim spans from each document:"""
+        return load_prompt(
+            "extraction/default",
+            question=question,
+            documents=json.dumps(documents, indent=2),
+        )
 
     def _build_per_fact_template_prompt(
         self, question: str, spans: List[str], citation_count: int
     ) -> str:
         """Build prompt for per-fact template generation."""
+        from .prompts import load_prompt
+
         span_lines = []
         for i, span in enumerate(spans, start=1):
             clean = span.replace("\n", " ").strip()[:100]  # Truncate for prompt size
             span_lines.append(f"{i}. {clean}...")
         spans_block = "\n".join(span_lines)
 
-        return f"""Generate a response template for this Q&A scenario:
-
-Question: {question}
-
-Content that will be inserted into the template:
-- Total verbatim facts to show (display facts): {len(spans)}
-- Full list of verbatim facts:
-{spans_block}
-- Additional citation-only facts (only numbers, no text shown): {citation_count}
-
-Template strategy rules:
-- Use per-fact placeholders [FACT_1]..[FACT_{len(spans)}] each exactly once.
-- If citation-only facts exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
-
-Instructions:
-- Intro: 1 concise sentence tying question to facts.
-- Then present each fact in a structured way (bulleted list or numbered list). Each list item should contain exactly one placeholder at the start after a bold label you infer or a generic label (e.g. Fact 3) if unsure.
-- DO NOT invent content beyond connective phrases; never summarize or paraphrase inside placeholders.
-- No duplicate placeholders; no placeholder inside a heading alone.
-- Avoid leading a bullet list with another nested bullet list.
-
-Template requirements:
-- Use only placeholders plus minimal connective prose (no actual span text).
-- {"Include [CITATION_REFS] once" if citation_count > 0 else "Do NOT include [CITATION_REFS]"}.
-- End without extra commentary like "Hope this helps".
-
-Return ONLY the template text (no explanation)."""
+        return load_prompt(
+            "template/per_fact",
+            question=question,
+            n_spans=len(spans),
+            spans_block=spans_block,
+            citation_count=citation_count,
+        )
 
     def _build_aggregate_template_prompt(
         self, question: str, spans: List[str], citation_count: int
     ) -> str:
         """Build prompt for aggregate template generation."""
+        from .prompts import load_prompt
+
         span_preview = " | ".join(span[:50] + "..." for span in spans[:3])
 
-        return f"""Generate a response template for this Q&A scenario (OUTPUT MUST BE VALID GITHUB-FLAVORED MARKDOWN):
-
-Question: {question}
-
-Content that will be inserted into the template:
-- Total verbatim facts to show (display facts): {len(spans)}
-- Preview of content: {span_preview}
-- Additional citation-only facts (only numbers, no text shown): {citation_count}
-
-Template strategy rules (Markdown correctness is critical):
-- Use [DISPLAY_SPANS] exactly once for the aggregate of all verbatim spans.
-- If citation-only facts exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
-
-Markdown formatting requirements:
-- Use only GitHub-Flavored Markdown (GFM): headings (##, ###), paragraphs, bullet/numbered lists, bold/italic, blockquotes, and tables.
-- Do NOT wrap the entire template in code fences.
-- Every heading must be followed by a blank line unless immediately followed by a list.
-- Placeholders must not be inside backticks, code blocks, or HTML tags.
-
-Instructions:
-- Intro: 1 concise sentence tying question to spans.
-- Provide a section header then include the aggregate placeholder.
-- Do NOT invent or paraphrase span content; placeholders stand in for verbatim content only.
-- Avoid nested lists; keep structure shallow and clean.
-
-Template requirements:
-- Must contain [DISPLAY_SPANS].
-- {"Include [CITATION_REFS] once" if citation_count > 0 else "Do NOT include [CITATION_REFS]"}.
-- End without extra commentary like "Hope this helps".
-
-Return ONLY the template text (no explanation)."""
+        return load_prompt(
+            "template/aggregate",
+            question=question,
+            n_spans=len(spans),
+            span_preview=span_preview,
+            citation_count=citation_count,
+        )
 
     def _fallback_template(self, has_citations: bool = False) -> str:
         """Return a simple fallback template when generation fails."""
-        template = """## Response
+        from .prompts import load_prompt
 
-Based on the available documents:
-
-[DISPLAY_SPANS]"""
-
-        if has_citations:
-            template += "\n\n**Additional References:** [CITATION_REFS]"
-
-        template += "\n\n---\n*These excerpts are taken verbatim from the source documents to ensure accuracy.*"
-
-        return template
+        return load_prompt("template/fallback", has_citations=has_citations)
 
     # Batch span extraction API (for compatibility)
     def extract_relevant_spans_batch(

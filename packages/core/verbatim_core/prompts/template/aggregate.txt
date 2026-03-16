@@ -1,0 +1,31 @@
+Generate a response template for this Q&A scenario (OUTPUT MUST BE VALID GITHUB-FLAVORED MARKDOWN):
+
+Question: {{ question }}
+
+Content that will be inserted into the template:
+- Total verbatim facts to show (display facts): {{ n_spans }}
+- Preview of content: {{ span_preview }}
+- Additional citation-only facts (only numbers, no text shown): {{ citation_count }}
+
+Template strategy rules (Markdown correctness is critical):
+- Use [DISPLAY_SPANS] exactly once for the aggregate of all verbatim spans.
+- If citation-only facts exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
+
+Markdown formatting requirements:
+- Use only GitHub-Flavored Markdown (GFM): headings (##, ###), paragraphs, bullet/numbered lists, bold/italic, blockquotes, and tables.
+- Do NOT wrap the entire template in code fences.
+- Every heading must be followed by a blank line unless immediately followed by a list.
+- Placeholders must not be inside backticks, code blocks, or HTML tags.
+
+Instructions:
+- Intro: 1 concise sentence tying question to spans.
+- Provide a section header then include the aggregate placeholder.
+- Do NOT invent or paraphrase span content; placeholders stand in for verbatim content only.
+- Avoid nested lists; keep structure shallow and clean.
+
+Template requirements:
+- Must contain [DISPLAY_SPANS].
+{% if citation_count > 0 %}- Include [CITATION_REFS] once.{% else %}- Do NOT include [CITATION_REFS].{% endif %}
+- End without extra commentary like "Hope this helps".
+
+Return ONLY the template text (no explanation).

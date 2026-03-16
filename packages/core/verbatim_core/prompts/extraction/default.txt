@@ -1,0 +1,26 @@
+Extract EXACT verbatim text spans from multiple documents that answer the question.
+
+# Rules
+1. Extract **only** text that explicitly addresses the question
+2. Never paraphrase, modify, or add to the original text
+3. Preserve original wording, capitalization, and punctuation
+4. Order spans within each document by relevance - MOST RELEVANT FIRST
+5. Include complete sentences or paragraphs for context
+
+# Output Format
+Return a JSON object mapping document IDs to span arrays ordered by relevance:
+{
+  "doc_0": ["most relevant span", "next most relevant span"],
+  "doc_1": ["most relevant from doc 1"],
+  "doc_2": []
+}
+
+If no relevant information in a document, use empty array.
+
+# Your Task
+Question: {{ question }}
+
+Documents:
+{{ documents }}
+
+Extract verbatim spans from each document:

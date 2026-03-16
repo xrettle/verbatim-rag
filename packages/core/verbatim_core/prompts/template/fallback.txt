@@ -1,0 +1,12 @@
+## Response
+
+Based on the available documents:
+
+[DISPLAY_SPANS]
+{% if has_citations %}
+
+**Additional References:** [CITATION_REFS]
+{% endif %}
+
+---
+*These excerpts are taken verbatim from the source documents to ensure accuracy.*

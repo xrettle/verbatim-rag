@@ -1,0 +1,25 @@
+Extract verbatim spans from the documents for each placeholder in the template.
+
+Question: {{ question }}
+
+Template to fill:
+{{ template }}
+
+Placeholders to extract for:
+{{ placeholder_spec }}
+
+Documents:
+{{ docs_text }}
+
+Instructions:
+1. For each placeholder, find EXACT verbatim quotes from the documents
+2. Copy text exactly - no paraphrasing or modification
+3. For each span, include which document it came from (0-indexed)
+4. Return a JSON object mapping placeholder names to arrays of objects with "text" and "doc" fields
+5. If no relevant information for a placeholder, use an empty array
+
+Return ONLY valid JSON like:
+{
+  "METHODOLOGY": [{"text": "exact quote about methods...", "doc": 0}],
+  "RESULTS": [{"text": "exact quote about results...", "doc": 1}]
+}

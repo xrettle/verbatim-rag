@@ -1,0 +1,27 @@
+Generate a response template for this Q&A scenario:
+
+Question: {{ question }}
+
+Content that will be inserted into the template:
+- Total verbatim facts to show (display facts): {{ n_spans }}
+- Full list of verbatim facts:
+{{ spans_block }}
+- Additional citation-only facts (only numbers, no text shown): {{ citation_count }}
+
+Template strategy rules:
+- Use per-fact placeholders [FACT_1]..[FACT_{{ n_spans }}] each exactly once.
+- If citation-only facts exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
+
+Instructions:
+- Intro: 1 concise sentence tying question to facts.
+- Then present each fact in a structured way (bulleted list or numbered list). Each list item should contain exactly one placeholder at the start after a bold label you infer or a generic label (e.g. Fact 3) if unsure.
+- DO NOT invent content beyond connective phrases; never summarize or paraphrase inside placeholders.
+- No duplicate placeholders; no placeholder inside a heading alone.
+- Avoid leading a bullet list with another nested bullet list.
+
+Template requirements:
+- Use only placeholders plus minimal connective prose (no actual span text).
+{% if citation_count > 0 %}- Include [CITATION_REFS] once.{% else %}- Do NOT include [CITATION_REFS].{% endif %}
+- End without extra commentary like "Hope this helps".
+
+Return ONLY the template text (no explanation).
