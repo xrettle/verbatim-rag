@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-03-16
+
+### Added
+- Fuzzy span matching (`span_match_mode="fuzzy"`) using rapidfuzz for documents with OCR artifacts or encoding issues
+- Custom extraction prompts via `extraction_prompt` and `system_prompt` parameters (Jinja2 syntax)
+- Prompt bank: built-in prompt templates in `verbatim_core.prompts` with `load_prompt()` and `list_prompts()`
+- All internal prompts now load from the prompt bank -- no hardcoded prompts in Python code
+
+### Changed
+- Added `rapidfuzz>=3.0.0` and `jinja2>=3.0.0` to verbatim-core base dependencies
+- Replaced print statements with proper `logging` throughout extractors
+
 ## [0.2.0] - 2026-03-10
 
 ### Added
