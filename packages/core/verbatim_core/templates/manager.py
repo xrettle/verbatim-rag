@@ -114,9 +114,7 @@ class TemplateManager:
         :param citation_spans: Spans for citation reference only
         :return: Completed response text
         """
-        # Extract span texts for template generation
-        all_spans = [span["text"] for span in display_spans + citation_spans]
-        citation_count = len(citation_spans)
+        all_spans, citation_count = self._get_template_inputs(display_spans, citation_spans)
 
         # Generate template
         strategy = self.strategies[self.current_mode]
@@ -139,8 +137,7 @@ class TemplateManager:
         :param citation_spans: Spans for citation reference only
         :return: Completed response text
         """
-        all_spans = [span["text"] for span in display_spans + citation_spans]
-        citation_count = len(citation_spans)
+        all_spans, citation_count = self._get_template_inputs(display_spans, citation_spans)
 
         strategy = self.strategies[self.current_mode]
 
@@ -151,6 +148,17 @@ class TemplateManager:
             template = strategy.generate(question, all_spans, citation_count)
 
         return strategy.fill(template, display_spans, citation_spans)
+
+    @staticmethod
+    def _get_template_inputs(
+        display_spans: List[Dict[str, Any]],
+        citation_spans: List[Dict[str, Any]],
+    ) -> tuple[List[str], int]:
+        has_linked_citations = any(span.get("citation_ids") for span in display_spans)
+        if has_linked_citations:
+            return [span["text"] for span in display_spans], 0
+
+        return [span["text"] for span in display_spans + citation_spans], len(citation_spans)
 
     def get_template(
         self, question: str = "", spans: List[str] = None, citation_count: int = 0

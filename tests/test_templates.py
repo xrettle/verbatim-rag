@@ -39,6 +39,25 @@ class TestTemplateFiller:
         assert "[1]" not in result
         assert "No numbers here." in result
 
+    def test_linked_citation_refs_are_appended_to_display_spans(self):
+        template = "[DISPLAY_SPANS]"
+        display = [{"text": "Synthesized point.", "citation_ids": ["v1", "v3"]}]
+        citation = [
+            {"text": "Source one.", "citation_id": "v1"},
+            {"text": "Source two.", "citation_id": "v2"},
+            {"text": "Source three.", "citation_id": "v3"},
+        ]
+        result = self.filler.fill(template, display, citation)
+        assert "[1] Synthesized point. [2] [4]" in result
+
+    def test_linked_citations_suppress_flat_citation_refs(self):
+        template = "[DISPLAY_SPANS]\n\nRefs: [CITATION_REFS]"
+        display = [{"text": "Synthesized point.", "citation_ids": ["v1"]}]
+        citation = [{"text": "Source one.", "citation_id": "v1"}]
+        result = self.filler.fill(template, display, citation)
+        assert "Refs:" in result
+        assert "Refs: [2]" not in result
+
     def test_empty_template(self):
         assert self.filler.fill("", [], []) == ""
 
@@ -143,6 +162,15 @@ class TestTemplateManager:
             citation_spans=[],
         )
         assert "Answer here." in result
+
+    def test_linked_citation_inputs_only_use_display_spans_for_template_generation(self):
+        tm = TemplateManager(llm_client=None, default_mode="static")
+        all_spans, citation_count = tm._get_template_inputs(
+            display_spans=[{"text": "Synthesized point.", "citation_ids": ["v1"]}],
+            citation_spans=[{"text": "Source one.", "citation_id": "v1"}],
+        )
+        assert all_spans == ["Synthesized point."]
+        assert citation_count == 0
 
     def test_use_static_mode_custom_template(self):
         tm = TemplateManager(llm_client=None)

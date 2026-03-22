@@ -34,19 +34,31 @@ class TemplateFiller:
         if not template:
             return ""
 
+        citation_number_by_id = self._build_citation_number_map(display_spans, citation_spans)
+        has_linked_citations = self._has_linked_citations(display_spans)
         citation_refs = ""
-        if citation_spans and self.citation_mode == "inline":
+        if citation_spans and self.citation_mode == "inline" and not has_linked_citations:
             start_num = len(display_spans) + 1
             end_num = len(display_spans) + len(citation_spans)
             citation_refs = " ".join(f"[{i}]" for i in range(start_num, end_num + 1))
 
         fact_pattern = re.compile(r"\[FACT_(\d+)\]")
         if fact_pattern.search(template):
-            filled = self._fill_per_fact_placeholders(template, display_spans, citation_spans)
+            filled = self._fill_per_fact_placeholders(
+                template,
+                display_spans,
+                citation_spans,
+                citation_number_by_id,
+            )
             if "[CITATION_REFS]" in filled:
                 filled = filled.replace("[CITATION_REFS]", citation_refs)
         else:
-            filled = self._fill_aggregate_placeholders(template, display_spans, citation_refs)
+            filled = self._fill_aggregate_placeholders(
+                template,
+                display_spans,
+                citation_refs,
+                citation_number_by_id,
+            )
 
         return filled.strip()
 
@@ -55,6 +67,7 @@ class TemplateFiller:
         template: str,
         display_spans: List[Dict[str, Any]],
         citation_spans: List[Dict[str, Any]],
+        citation_number_by_id: Dict[str, int],
     ) -> str:
         fact_pattern = re.compile(r"\[FACT_(\d+)\]")
         total_spans = display_spans + citation_spans
@@ -63,8 +76,8 @@ class TemplateFiller:
             idx = int(match.group(1))
             if 1 <= idx <= len(total_spans):
                 if idx <= len(display_spans):
-                    span_text = display_spans[idx - 1].get("text", "")
-                    return self._format_span(span_text, idx, self._is_table(span_text))
+                    span_data = display_spans[idx - 1]
+                    return self._format_span(span_data, idx, citation_number_by_id)
                 else:
                     return f"[{idx}]" if self.citation_mode == "inline" else ""
             return ""
@@ -72,13 +85,16 @@ class TemplateFiller:
         return fact_pattern.sub(replace_fact, template)
 
     def _fill_aggregate_placeholders(
-        self, template: str, display_spans: List[Dict[str, Any]], citation_refs: str
+        self,
+        template: str,
+        display_spans: List[Dict[str, Any]],
+        citation_refs: str,
+        citation_number_by_id: Dict[str, int],
     ) -> str:
         if display_spans:
             formatted = []
             for i, span_data in enumerate(display_spans, 1):
-                span_text = span_data.get("text", "")
-                block = self._format_span(span_text, i, self._is_table(span_text))
+                block = self._format_span(span_data, i, citation_number_by_id)
                 if block:
                     formatted.append(block)
 
@@ -98,17 +114,66 @@ class TemplateFiller:
 
         return filled
 
-    def _format_span(self, text: str, index: int, is_table: bool = False) -> str:
+    def _format_span(
+        self,
+        span_data: Dict[str, Any],
+        index: int,
+        citation_number_by_id: Dict[str, int],
+    ) -> str:
+        text = span_data.get("text", "")
         cleaned = text.strip()
         if not cleaned:
             return ""
 
+        citation_refs = self._format_linked_citation_refs(span_data, citation_number_by_id)
+        is_table = self._is_table(cleaned)
+
         if self.citation_mode == "inline":
             if is_table:
+                if citation_refs:
+                    return f"[{index}] {citation_refs}\n\n{cleaned}"
                 return f"[{index}]\n\n{cleaned}"
+            if citation_refs:
+                return f"[{index}] {cleaned} {citation_refs}"
             return f"[{index}] {cleaned}"
 
         return cleaned
+
+    @staticmethod
+    def _has_linked_citations(display_spans: List[Dict[str, Any]]) -> bool:
+        return any(span.get("citation_ids") for span in display_spans)
+
+    @staticmethod
+    def _build_citation_number_map(
+        display_spans: List[Dict[str, Any]],
+        citation_spans: List[Dict[str, Any]],
+    ) -> Dict[str, int]:
+        start_num = len(display_spans) + 1
+        citation_number_by_id: Dict[str, int] = {}
+        for offset, citation_span in enumerate(citation_spans):
+            citation_id = citation_span.get("citation_id")
+            if citation_id:
+                citation_number_by_id[str(citation_id)] = start_num + offset
+        return citation_number_by_id
+
+    def _format_linked_citation_refs(
+        self,
+        span_data: Dict[str, Any],
+        citation_number_by_id: Dict[str, int],
+    ) -> str:
+        if self.citation_mode != "inline":
+            return ""
+
+        citation_ids = span_data.get("citation_ids", [])
+        citation_numbers = [
+            citation_number_by_id[str(citation_id)]
+            for citation_id in citation_ids
+            if str(citation_id) in citation_number_by_id
+        ]
+        if not citation_numbers:
+            return ""
+
+        return " ".join(f"[{citation_number}]" for citation_number in citation_numbers)
 
     @staticmethod
     def _is_table(text: str) -> bool:
