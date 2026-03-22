@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-03-22
+
+### Added
+- Linked citations: display spans can now reference specific citation sources via `citation_ids`, enabling per-claim traceability
+- When linked citations are present, flat `[CITATION_REFS]` is suppressed to avoid double-referencing
+- 3 new tests for linked citation behavior
+
+### Changed
+- `TemplateFiller._format_span` now takes full span data dict instead of raw text, enabling richer formatting
+- Extracted `_get_template_inputs` and `_build_citation_number_map` as clean static methods
+
 ## [0.2.1] - 2026-03-16
 
 ### Added

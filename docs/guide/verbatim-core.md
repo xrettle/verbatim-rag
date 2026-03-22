@@ -179,6 +179,32 @@ tm = TemplateManager(llm_client=client, default_mode="contextual")
 - `[FACT_1]`, `[FACT_2]`, ... -- individual span placeholders
 - `[CITATION_REFS]` -- citation-only reference numbers
 
+### Linked Citations
+
+By default, citations are appended as a flat list at the end. With linked citations, each display span can reference the specific sources that back it:
+
+```python
+display_spans = [
+    {
+        "text": "Treatment X showed 30% improvement over baseline.",
+        "citation_ids": ["v1", "v3"],  # links to specific citation spans
+    }
+]
+citation_spans = [
+    {"text": "Table 2: Treatment X results...", "citation_id": "v1"},
+    {"text": "Secondary outcomes were...", "citation_id": "v2"},
+    {"text": "The 30% figure was significant (p<0.01).", "citation_id": "v3"},
+]
+```
+
+Output with inline citations:
+
+```
+[1] Treatment X showed 30% improvement over baseline. [2] [4]
+```
+
+Each claim maps directly to its supporting sources. When linked citations are present, the flat `[CITATION_REFS]` placeholder is automatically suppressed to avoid double-referencing.
+
 ## @verbatim_enhance Decorator
 
 Wrap any existing RAG function to add verbatim grounding:
