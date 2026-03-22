@@ -31,6 +31,7 @@ class LLMClient:
         model: str = "gpt-4o-mini",
         temperature: float = 0.7,
         api_base: str = "https://api.openai.com/v1",
+        api_key: str | None = None,
     ):
         """
         Initialize the LLM client.
@@ -38,10 +39,11 @@ class LLMClient:
         :param model: The OpenAI model to use
         :param temperature: Default temperature for completions
         :param api_base: The base URL for the OpenAI API (can be used with custom models and with VLLM)
+        :param api_key: Optional API key. Falls back to OPENAI_API_KEY when unset.
         """
         self.model = model
         self.temperature = temperature
-        self.api_key = os.getenv("OPENAI_API_KEY") or "EMPTY"
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or "EMPTY"
         self.client = openai.OpenAI(base_url=api_base, api_key=self.api_key)
 
         self.async_client = openai.AsyncOpenAI(base_url=api_base, api_key=self.api_key)

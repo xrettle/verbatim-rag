@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-03-22
+
+### Added
+- `api_key` parameter on `LLMClient` for explicit API key passing (falls back to `OPENAI_API_KEY` env var)
+- Test for explicit API key usage
+
 ## [0.2.2] - 2026-03-22
 
 ### Added

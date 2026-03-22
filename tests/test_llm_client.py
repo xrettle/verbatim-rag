@@ -4,6 +4,21 @@ import json
 
 
 class TestComplete:
+    def test_explicit_api_key_is_used(self):
+        from unittest.mock import MagicMock, patch
+
+        with patch("verbatim_core.llm_client.openai") as mock_openai:
+            mock_openai.OpenAI.return_value = MagicMock()
+            mock_openai.AsyncOpenAI.return_value = MagicMock()
+
+            from verbatim_core.llm_client import LLMClient
+
+            client = LLMClient(model="test-model", api_key="explicit-key")
+
+        assert client.api_key == "explicit-key"
+        assert mock_openai.OpenAI.call_args.kwargs["api_key"] == "explicit-key"
+        assert mock_openai.AsyncOpenAI.call_args.kwargs["api_key"] == "explicit-key"
+
     def test_basic_complete(self, mock_llm_client, mock_openai_response):
         client, mock_sync, _, make_response = mock_llm_client
         mock_sync.chat.completions.create.return_value = make_response("Hello!")
