@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-04-27
+
+### Added
+- `ModelSpanExtractor` now supports the `KRLabsOrg/verbatim-rag-modern-bert-v2` highlighter (token classifier with `.process()` API loaded via `trust_remote_code=True`); legacy `QAModel` checkpoints continue to work and are auto-detected at load time
+- `model_path` now defaults to `KRLabsOrg/verbatim-rag-modern-bert-v2`
+- Highlighter tuning knobs: `min_span_chars`, `merge_gap_chars`, `max_length`, `doc_stride`
+- MPS device auto-detection for Apple Silicon
+
+### Changed
+- Default `ModelSpanExtractor` threshold lowered from `0.5` to `0.2` to match the v2 highlighter's published headline. **If you use the legacy v1 sentence model, pass `threshold=0.5` explicitly.**
+- `verbatim-rag` now requires `verbatim-core>=0.2.4`
+
 ## [0.2.3] - 2026-03-22
 
 ### Added

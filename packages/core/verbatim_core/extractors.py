@@ -43,27 +43,105 @@ class SpanExtractor(ABC):
 
 
 class ModelSpanExtractor(SpanExtractor):
-    """Extract spans using a fine-tuned QA sentence classification model."""
+    """Extract spans using a Verbatim-RAG ModernBERT model.
+
+    Supports two model formats and auto-detects which one ``model_path`` is:
+
+    - **highlighter** (`KRLabsOrg/verbatim-rag-modern-bert-v2`,
+      `KRLabsOrg/acl-verbatim-modernbert`): a token classifier loaded via
+      ``AutoModel.from_pretrained(..., trust_remote_code=True)`` that exposes
+      a ``.process()`` method returning character spans. This is the current
+      Verbatim-RAG model family.
+    - **qa_model** (`KRLabsOrg/verbatim-rag-modern-bert-v1` and earlier
+      checkpoints): the legacy custom ``QAModel`` sentence classifier.
+
+    Detection is done at load time by checking the model config for an
+    ``auto_map`` entry pointing to a ``.process()``-capable class. Both
+    formats yield the same return shape: ``dict[chunk_text, list[span_text]]``.
+    """
+
+    DEFAULT_MODEL = "KRLabsOrg/verbatim-rag-modern-bert-v2"
+    _FORMAT_HIGHLIGHTER = "highlighter"
+    _FORMAT_QA_MODEL = "qa_model"
 
     def __init__(
         self,
-        model_path: str,
+        model_path: str = DEFAULT_MODEL,
         device: str | None = None,
-        threshold: float = 0.5,
+        threshold: float = 0.2,
         extraction_mode: str = "individual",
         max_display_spans: int = 5,
+        # Highlighter-format-only knobs (ignored for the legacy qa_model path):
+        min_span_chars: int = 30,
+        merge_gap_chars: int = 20,
+        max_length: int = 8192,
+        doc_stride: int = 256,
     ):
         """
-        Initialize the model-based span extractor.
-
-        :param model_path: Path to the trained QA model
-        :param device: Device to run the model on (auto-detects if None)
-        :param threshold: Threshold for sentence classification
-        :param extraction_mode: Not used for model extractor
-        :param max_display_spans: Not used for model extractor
+        :param model_path: Path or HuggingFace id. Defaults to v2 generic.
+        :param device: ``"cuda"`` / ``"mps"`` / ``"cpu"`` or None to auto-detect.
+        :param threshold: Probability cutoff. Default 0.2 matches v2's
+            published headline; raise to 0.5 for the legacy v1 sentence model.
+        :param extraction_mode: Reserved for future use.
+        :param max_display_spans: Reserved for future use.
+        :param min_span_chars: (highlighter only) drop predicted spans shorter
+            than this many characters.
+        :param merge_gap_chars: (highlighter only) merge adjacent spans
+            separated by ≤ this many characters.
+        :param max_length: (highlighter only) max tokens per sliding window.
+        :param doc_stride: (highlighter only) token overlap between windows.
         """
-        # Lazy-import heavy deps so importing this module doesn't require them
         import torch
+
+        self.model_path = model_path
+        self.threshold = threshold
+        self.min_span_chars = min_span_chars
+        self.merge_gap_chars = merge_gap_chars
+        self.max_length = max_length
+        self.doc_stride = doc_stride
+        self._torch = torch
+
+        if device is None:
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+        self.device = device
+
+        self._format = self._detect_format(model_path)
+        logger.info("Loading model from %s as format=%s on %s", model_path, self._format, device)
+        if self._format == self._FORMAT_HIGHLIGHTER:
+            self._init_highlighter(model_path)
+        else:
+            self._init_qa_model(model_path)
+
+    @staticmethod
+    def _detect_format(model_path: str) -> str:
+        """Return ``"highlighter"`` if the model exposes a ``.process()`` API
+        via ``trust_remote_code``, else ``"qa_model"`` (legacy)."""
+        try:
+            from transformers import AutoConfig
+
+            config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+            auto_map = getattr(config, "auto_map", None) or {}
+            target = auto_map.get("AutoModel") or auto_map.get("AutoModelForTokenClassification")
+            if target and "Highlighter" in target:
+                return ModelSpanExtractor._FORMAT_HIGHLIGHTER
+        except Exception as exc:
+            logger.debug("Highlighter detection failed for %s: %s", model_path, exc)
+        return ModelSpanExtractor._FORMAT_QA_MODEL
+
+    def _init_highlighter(self, model_path: str) -> None:
+        from transformers import AutoModel
+
+        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+        self.model.to(self.device)
+        self.model.eval()
+        self.tokenizer = None  # the highlighter loads its tokenizer internally
+
+    def _init_qa_model(self, model_path: str) -> None:
         from transformers import AutoTokenizer
 
         from .extractor_models.dataset import (
@@ -78,36 +156,21 @@ class ModelSpanExtractor(SpanExtractor):
         )
         from .extractor_models.model import QAModel
 
-        self.model_path = model_path
-        self.threshold = threshold
-        self._torch = torch
-        self.device = device or ("cuda" if self._torch.cuda.is_available() else "cpu")
-
-        # Cache dataset classes for reuse without re-import
         self.QADataset = QADataset
         self.DatasetSentence = DatasetSentence
         self.DatasetDocument = DatasetDocument
         self.QASample = QASample
 
-        logger.info("Loading model from %s...", model_path)
-
-        # Load the model
         self.model = QAModel.from_pretrained(model_path)
         self.model.to(self.device)
         self.model.eval()
 
-        # Load the tokenizer
         try:
-            logger.info("Loading tokenizer from %s...", model_path)
             self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            logger.info("Tokenizer loaded successfully.")
         except Exception as e:
             logger.warning("Could not load tokenizer from %s: %s", model_path, e)
-            # Fall back to base model
             base_model = getattr(self.model.config, "model_name", "answerdotai/ModernBERT-base")
-            logger.info("Trying to load tokenizer from base model: %s", base_model)
             self.tokenizer = AutoTokenizer.from_pretrained(base_model)
-            logger.info("Loaded tokenizer from %s", base_model)
 
     def _split_into_sentences(self, text: str) -> list[str]:
         """Simple sentence splitting."""
@@ -117,25 +180,51 @@ class ModelSpanExtractor(SpanExtractor):
         return [s.strip() for s in sentences if s.strip()]
 
     def extract_spans(self, question: str, search_results: List[Any]) -> Dict[str, List[str]]:
-        """
-        Extract spans using the trained model.
+        """Extract spans using the loaded model. Dispatches by format."""
+        if self._format == self._FORMAT_HIGHLIGHTER:
+            return self._extract_highlighter(question, search_results)
+        return self._extract_qa_model(question, search_results)
 
-        :param question: The query or question
-        :param search_results: List of search results to extract from
-        :return: Dictionary mapping result text to list of relevant spans
-        """
-        relevant_spans = {}
+    def _extract_highlighter(
+        self, question: str, search_results: List[Any]
+    ) -> Dict[str, List[str]]:
+        relevant: Dict[str, List[str]] = {}
+        for result in search_results:
+            context = getattr(result, "text", "")
+            if not context.strip():
+                relevant[context] = []
+                continue
+            try:
+                out = self.model.process(
+                    question=question,
+                    context=context,
+                    threshold=self.threshold,
+                    min_span_chars=self.min_span_chars,
+                    merge_gap_chars=self.merge_gap_chars,
+                    max_length=self.max_length,
+                    doc_stride=self.doc_stride,
+                )
+                relevant[context] = [
+                    sp["text"] for sp in out.get("spans", [])
+                    if sp.get("text", "").strip()
+                ]
+            except Exception as exc:
+                logger.error("Highlighter extraction failed: %s", exc)
+                relevant[context] = []
+        return relevant
+
+    def _extract_qa_model(
+        self, question: str, search_results: List[Any]
+    ) -> Dict[str, List[str]]:
+        relevant_spans: Dict[str, List[str]] = {}
 
         for result in search_results:
             raw_text = getattr(result, "text", "")
-
-            # Split text into sentences
             raw_sentences = self._split_into_sentences(raw_text)
             if not raw_sentences:
                 relevant_spans[raw_text] = []
                 continue
 
-            # Create dataset objects for model processing
             dataset_sentences = [
                 self.DatasetSentence(text=sent, relevant=False, sentence_id=f"s{i}")
                 for i, sent in enumerate(raw_sentences)
@@ -156,7 +245,6 @@ class ModelSpanExtractor(SpanExtractor):
                 continue
 
             encoding = dataset[0]
-
             input_ids = encoding["input_ids"].unsqueeze(0).to(self.device)
             attention_mask = encoding["attention_mask"].unsqueeze(0).to(self.device)
 
@@ -167,7 +255,6 @@ class ModelSpanExtractor(SpanExtractor):
                     sentence_boundaries=[encoding["sentence_boundaries"]],
                 )
 
-            # Extract spans based on predictions
             spans = []
             if len(predictions) > 0 and len(predictions[0]) > 0:
                 sentence_preds = self._torch.nn.functional.softmax(predictions[0], dim=1)
