@@ -104,7 +104,10 @@ class ModelSpanExtractor(SpanExtractor):
         if device is None:
             if torch.cuda.is_available():
                 device = "cuda"
-            elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+            elif (
+                getattr(torch.backends, "mps", None) is not None
+                and torch.backends.mps.is_available()
+            ):
                 device = "mps"
             else:
                 device = "cpu"
@@ -205,17 +208,14 @@ class ModelSpanExtractor(SpanExtractor):
                     doc_stride=self.doc_stride,
                 )
                 relevant[context] = [
-                    sp["text"] for sp in out.get("spans", [])
-                    if sp.get("text", "").strip()
+                    sp["text"] for sp in out.get("spans", []) if sp.get("text", "").strip()
                 ]
             except Exception as exc:
                 logger.error("Highlighter extraction failed: %s", exc)
                 relevant[context] = []
         return relevant
 
-    def _extract_qa_model(
-        self, question: str, search_results: List[Any]
-    ) -> Dict[str, List[str]]:
+    def _extract_qa_model(self, question: str, search_results: List[Any]) -> Dict[str, List[str]]:
         relevant_spans: Dict[str, List[str]] = {}
 
         for result in search_results:
