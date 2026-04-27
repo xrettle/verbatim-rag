@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-04-27
+
+### Changed
+- Tighten sdist packaging: `pyproject.toml` for both `verbatim-rag` and `verbatim-core` now declares an explicit `[tool.hatch.build.targets.sdist]` allowlist so source distributions only ship listed package and metadata files.
+- `verbatim-rag` now requires `verbatim-core>=0.2.5`.
+
 ## [0.2.4] - 2026-04-27
 
 ### Added

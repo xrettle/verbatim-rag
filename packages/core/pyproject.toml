@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "verbatim-core"
-version = "0.2.4"
+version = "0.2.5"
 description = "Lightweight verbatim span extraction -- the RAG-agnostic core of verbatim-rag"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -40,3 +40,10 @@ verbatim-enhance = "verbatim_core.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["verbatim_core"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/verbatim_core",
+    "/README.md",
+    "/pyproject.toml",
+]
