@@ -26,6 +26,41 @@ class TestVerifySpans:
         assert result == []
 
 
+class TestVerifySpansFuzzy:
+    def setup_method(self):
+        self.extractor = LLMSpanExtractor(
+            llm_client=MagicMock(),
+            span_match_mode="fuzzy",
+        )
+
+    def test_fuzzy_match_preserves_document_token_boundaries(self):
+        span = (
+            "The art of the movement spanned visual, literary, and sound media, "
+            "including collage, sound poetry, cut - up writing, and sculpture."
+        )
+        document = (
+            "x The art of the movement spanned visual , literary , and sound media , "
+            "including collage , sound poetry , cut - up writing , and sculpture . more"
+        )
+
+        result = self.extractor._verify_spans([span], document)
+
+        assert result == [
+            (
+                "The art of the movement spanned visual , literary , and sound media , "
+                "including collage , sound poetry , cut - up writing , and sculpture ."
+            )
+        ]
+
+    def test_fuzzy_match_normalizes_case_and_punctuation_spacing(self):
+        result = self.extractor._verify_spans(
+            ["THE CAT, SAT."],
+            "Before the cat , sat . after",
+        )
+
+        assert result == ["the cat , sat ."]
+
+
 class TestExtractSpans:
     def test_empty_results(self):
         extractor = LLMSpanExtractor(llm_client=MagicMock())

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] - 2026-05-18
+
+### Changed
+- `LLMSpanExtractor` fuzzy matching now normalizes text at token boundaries (NFKC + casefold) before alignment, preventing RapidFuzz offsets from landing mid-word. Matched slices are mapped back to original token boundaries in the source document.
+- `verbatim-rag` now requires `verbatim-core>=0.2.6`.
+
 ## [0.2.5] - 2026-04-27
 
 ### Changed

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import unicodedata
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from rapidfuzz.fuzz import partial_ratio_alignment
@@ -17,6 +20,15 @@ from rapidfuzz.fuzz import partial_ratio_alignment
 from .llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
+
+_FUZZY_TOKEN_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+
+
+@dataclass(frozen=True)
+class _NormalizedTokenText:
+    text: str
+    original_token_offsets: List[tuple[int, int]]
+    normalized_token_offsets: List[tuple[int, int]]
 
 
 class SpanExtractor(ABC):
@@ -811,10 +823,8 @@ class LLMSpanExtractor(SpanExtractor):
                 continue
 
             # Fall back to fuzzy matching
-            result = partial_ratio_alignment(span, document_text)
-            score = result.score / 100.0
-            if score >= self.fuzzy_threshold:
-                matched_text = document_text[result.dest_start : result.dest_end]
+            score, matched_text = self._find_fuzzy_span_match(span, document_text)
+            if score >= self.fuzzy_threshold and matched_text:
                 verified.append(matched_text)
             else:
                 logger.warning(
@@ -823,3 +833,84 @@ class LLMSpanExtractor(SpanExtractor):
                     span[:100],
                 )
         return verified
+
+    @classmethod
+    def _find_fuzzy_span_match(cls, span: str, document_text: str) -> tuple[float, str]:
+        """
+        Locate a fuzzy span in the document and return document text on token boundaries.
+
+        RapidFuzz alignment offsets are character-level and can land in the
+        middle of words. Matching normalized token text keeps OCR/punctuation
+        tolerance while mapping the final slice back to original token offsets.
+        """
+        normalized_span = cls._normalize_for_fuzzy_span_match(span)
+        normalized_document = cls._normalize_for_fuzzy_span_match(document_text)
+
+        if not normalized_span.text or not normalized_document.text:
+            return 0.0, ""
+
+        result = partial_ratio_alignment(normalized_span.text, normalized_document.text)
+        score = result.score / 100.0
+        matched_text = cls._slice_original_text_from_normalized_offsets(
+            document_text,
+            normalized_document,
+            result.dest_start,
+            result.dest_end,
+        )
+        return score, matched_text
+
+    @staticmethod
+    def _normalize_for_fuzzy_span_match(text: str) -> _NormalizedTokenText:
+        parts: List[str] = []
+        original_token_offsets: List[tuple[int, int]] = []
+        normalized_token_offsets: List[tuple[int, int]] = []
+        normalized_pos = 0
+
+        for match in _FUZZY_TOKEN_RE.finditer(text):
+            token = unicodedata.normalize("NFKC", match.group(0)).casefold()
+            if not token:
+                continue
+
+            if parts:
+                parts.append(" ")
+                normalized_pos += 1
+
+            token_start = normalized_pos
+            parts.append(token)
+            normalized_pos += len(token)
+
+            original_token_offsets.append((match.start(), match.end()))
+            normalized_token_offsets.append((token_start, normalized_pos))
+
+        return _NormalizedTokenText(
+            text="".join(parts),
+            original_token_offsets=original_token_offsets,
+            normalized_token_offsets=normalized_token_offsets,
+        )
+
+    @staticmethod
+    def _slice_original_text_from_normalized_offsets(
+        original_text: str,
+        normalized_text: _NormalizedTokenText,
+        normalized_start: int,
+        normalized_end: int,
+    ) -> str:
+        first_token_idx = None
+        last_token_idx = None
+
+        for idx, (token_start, token_end) in enumerate(normalized_text.normalized_token_offsets):
+            if token_end <= normalized_start:
+                continue
+            if token_start >= normalized_end:
+                break
+
+            if first_token_idx is None:
+                first_token_idx = idx
+            last_token_idx = idx
+
+        if first_token_idx is None or last_token_idx is None:
+            return ""
+
+        original_start = normalized_text.original_token_offsets[first_token_idx][0]
+        original_end = normalized_text.original_token_offsets[last_token_idx][1]
+        return original_text[original_start:original_end]
