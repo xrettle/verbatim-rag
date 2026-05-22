@@ -77,7 +77,7 @@ class StructuredTemplate(TemplateStrategy):
 
         has_semantic = bool(self.PLACEHOLDER_PATTERN.search(template))
         has_standard = any(
-            p in template for p in ("[DISPLAY_SPANS]", "[RELEVANT_SENTENCES]", "[FACT_1]")
+            p in template for p in ("[DISPLAY_SPANS]", "[RELEVANT_SENTENCES]", "[SPAN_1]", "[FACT_1]")
         )
 
         if not (has_semantic or has_standard):
@@ -108,7 +108,7 @@ class StructuredTemplate(TemplateStrategy):
 
         for match in self.PLACEHOLDER_PATTERN.finditer(self.template):
             name = match.group(1)
-            if name.startswith("FACT_"):
+            if name.startswith(("FACT_", "SPAN_")):
                 continue
             if name in self.SYSTEM_PLACEHOLDERS:
                 continue

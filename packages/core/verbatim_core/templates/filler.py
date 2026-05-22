@@ -2,7 +2,7 @@
 Template filling utilities for the Verbatim RAG system.
 
 Handles aggregate placeholders ([DISPLAY_SPANS], [RELEVANT_SENTENCES]) and
-per-fact placeholders ([FACT_1], ...). Supports toggling inline citation
+per-span placeholders ([SPAN_1], ...). Supports toggling inline citation
 numbering on or off so callers can choose between numbered excerpts or
 clean text with citations handled separately.
 """
@@ -42,7 +42,7 @@ class TemplateFiller:
             end_num = len(display_spans) + len(citation_spans)
             citation_refs = " ".join(f"[{i}]" for i in range(start_num, end_num + 1))
 
-        fact_pattern = re.compile(r"\[FACT_(\d+)\]")
+        fact_pattern = re.compile(r"\[(?:SPAN|FACT)_(\d+)\]")
         if fact_pattern.search(template):
             filled = self._fill_per_fact_placeholders(
                 template,
@@ -69,7 +69,7 @@ class TemplateFiller:
         citation_spans: List[Dict[str, Any]],
         citation_number_by_id: Dict[str, int],
     ) -> str:
-        fact_pattern = re.compile(r"\[FACT_(\d+)\]")
+        fact_pattern = re.compile(r"\[(?:SPAN|FACT)_(\d+)\]")
         total_spans = display_spans + citation_spans
 
         def replace_fact(match):
@@ -199,7 +199,7 @@ class TemplateFiller:
 
     @staticmethod
     def ensure_placeholder(template: str, placeholder: str = "[DISPLAY_SPANS]") -> str:
-        acceptable = ["[RELEVANT_SENTENCES]", "[DISPLAY_SPANS]", "[FACT_1]"]
+        acceptable = ["[RELEVANT_SENTENCES]", "[DISPLAY_SPANS]", "[SPAN_1]", "[FACT_1]"]
 
         if any(p in template for p in acceptable):
             return template

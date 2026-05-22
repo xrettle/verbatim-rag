@@ -3,13 +3,13 @@ Generate a response template for this Q&A scenario (OUTPUT MUST BE VALID GITHUB-
 Question: {{ question }}
 
 Content that will be inserted into the template:
-- Total verbatim facts to show (display facts): {{ n_spans }}
+- Total verbatim quotes to show: {{ n_spans }}
 - Preview of content: {{ span_preview }}
-- Additional citation-only facts (only numbers, no text shown): {{ citation_count }}
+- Additional citation-only quotes (only numbers, no text shown): {{ citation_count }}
 
 Template strategy rules (Markdown correctness is critical):
 - Use [DISPLAY_SPANS] exactly once for the aggregate of all verbatim spans.
-- If citation-only facts exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
+- If citation-only quotes exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
 
 Markdown formatting requirements:
 - Use only GitHub-Flavored Markdown (GFM): headings (##, ###), paragraphs, bullet/numbered lists, bold/italic, blockquotes, and tables.
@@ -18,8 +18,8 @@ Markdown formatting requirements:
 - Placeholders must not be inside backticks, code blocks, or HTML tags.
 
 Instructions:
-- Intro: 1 concise sentence tying question to spans.
-- Provide a section header then include the aggregate placeholder.
+- Intro: 1 concise sentence tying the question to the quotes. Do NOT call them "facts".
+- Provide a section header (do NOT use the word "facts" — prefer "Relevant Quotes", "From the literature", or something contextually appropriate) then include the aggregate placeholder.
 - Do NOT invent or paraphrase span content; placeholders stand in for verbatim content only.
 - Avoid nested lists; keep structure shallow and clean.
 

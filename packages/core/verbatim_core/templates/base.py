@@ -80,6 +80,7 @@ class TemplateStrategy(ABC):
         acceptable_placeholders = [
             "[RELEVANT_SENTENCES]",
             "[DISPLAY_SPANS]",
+            "[SPAN_1]",
             "[FACT_1]",
         ]
 
@@ -87,5 +88,5 @@ class TemplateStrategy(ABC):
         if not has_placeholder:
             raise ValueError(
                 "Template must contain at least one of: "
-                "[RELEVANT_SENTENCES], [DISPLAY_SPANS], or [FACT_1]"
+                "[RELEVANT_SENTENCES], [DISPLAY_SPANS], or [SPAN_1]"
             )

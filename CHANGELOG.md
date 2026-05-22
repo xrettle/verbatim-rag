@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] - 2026-05-22
+
+### Changed
+- Template generation prompts no longer use the word "facts": replaced with "quotes" throughout, renamed per-span placeholders from `[FACT_N]` to `[SPAN_N]`, and added explicit instructions to infer labels from content rather than placeholder names. Existing stored templates with `[FACT_N]` continue to work.
+- `verbatim-rag` now requires `verbatim-core>=0.2.7`.
+
 ## [0.2.6] - 2026-05-18
 
 ### Changed

@@ -3,18 +3,18 @@ Generate a response template for this Q&A scenario:
 Question: {{ question }}
 
 Content that will be inserted into the template:
-- Total verbatim facts to show (display facts): {{ n_spans }}
-- Full list of verbatim facts:
+- Total verbatim quotes to show: {{ n_spans }}
+- Full list of verbatim quotes:
 {{ spans_block }}
-- Additional citation-only facts (only numbers, no text shown): {{ citation_count }}
+- Additional citation-only quotes (only numbers, no text shown): {{ citation_count }}
 
 Template strategy rules:
-- Use per-fact placeholders [FACT_1]..[FACT_{{ n_spans }}] each exactly once.
-- If citation-only facts exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
+- Use placeholders [SPAN_1]..[SPAN_{{ n_spans }}] each exactly once.
+- If citation-only quotes exist, you MAY place [CITATION_REFS] exactly once where their numbers should appear, otherwise omit it.
 
 Instructions:
-- Intro: 1 concise sentence tying question to facts.
-- Then present each fact in a structured way (bulleted list or numbered list). Each list item should contain exactly one placeholder at the start after a bold label you infer or a generic label (e.g. Fact 3) if unsure.
+- Intro: 1 concise sentence tying the question to the quotes. Do NOT call them "facts".
+- Present each quote in a structured list. Each item contains exactly one placeholder. Labels must be inferred from the CONTENT of the quote (e.g. a bold topic label), NOT derived from the placeholder name. Never write "Span N", "Fact N", "Quote N" or similar generic labels.
 - DO NOT invent content beyond connective phrases; never summarize or paraphrase inside placeholders.
 - No duplicate placeholders; no placeholder inside a heading alone.
 - Avoid leading a bullet list with another nested bullet list.
