@@ -77,7 +77,8 @@ class StructuredTemplate(TemplateStrategy):
 
         has_semantic = bool(self.PLACEHOLDER_PATTERN.search(template))
         has_standard = any(
-            p in template for p in ("[DISPLAY_SPANS]", "[RELEVANT_SENTENCES]", "[SPAN_1]", "[FACT_1]")
+            p in template
+            for p in ("[DISPLAY_SPANS]", "[RELEVANT_SENTENCES]", "[SPAN_1]", "[FACT_1]")
         )
 
         if not (has_semantic or has_standard):
