@@ -248,6 +248,10 @@ class LLMClient:
         spans: List[str],
         citation_count: int,
         use_per_fact: bool = True,
+        template_preview_chars: Optional[int] = 100,
+        preserve_span_newlines: bool = False,
+        template_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
     ) -> str:
         """
         Generate a contextual template for the given question and spans.
@@ -255,16 +259,30 @@ class LLMClient:
         :param question: The user's question
         :param spans: List of spans that will fill the template
         :param citation_count: Number of citation-only spans
-        :param use_per_fact: Whether to use per-fact placeholders
+        :param use_per_fact: Whether to use per-span placeholders
+        :param template_preview_chars: Max chars per span shown to the template LLM.
+            None = no truncation. Default 100 reproduces pre-0.2.8 behaviour.
+        :param preserve_span_newlines: Keep newlines in spans shown to the template
+            LLM. Default False collapses them (pre-0.2.8 behaviour).
+        :param template_prompt: Custom Jinja2 prompt string. Variables available:
+            question, n_spans, citation_count, spans_block (per-fact) or
+            span_preview (aggregate). None uses the bundled prompt.
+        :param system_prompt: System message for the template-generation call.
         :return: Generated template string
         """
         if use_per_fact and len(spans) <= 8:
-            prompt = self._build_per_fact_template_prompt(question, spans, citation_count)
+            prompt = self._build_per_fact_template_prompt(
+                question, spans, citation_count, template_preview_chars,
+                preserve_span_newlines, template_prompt,
+            )
         else:
-            prompt = self._build_aggregate_template_prompt(question, spans, citation_count)
+            prompt = self._build_aggregate_template_prompt(
+                question, spans, citation_count, template_preview_chars,
+                preserve_span_newlines, template_prompt,
+            )
 
         try:
-            return self.complete(prompt, temperature=self.temperature)
+            return self.complete(prompt, temperature=self.temperature, system_prompt=system_prompt)
         except Exception as e:
             logger.error("Template generation failed: %s", e)
             return self._fallback_template(citation_count > 0)
@@ -275,23 +293,29 @@ class LLMClient:
         spans: List[str],
         citation_count: int,
         use_per_fact: bool = True,
+        template_preview_chars: Optional[int] = 100,
+        preserve_span_newlines: bool = False,
+        template_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
     ) -> str:
         """
-        Async template generation.
-
-        :param question: The user's question
-        :param spans: List of spans that will fill the template
-        :param citation_count: Number of citation-only spans
-        :param use_per_fact: Whether to use per-fact placeholders
-        :return: Generated template string
+        Async template generation. See generate_template for parameter docs.
         """
         if use_per_fact and len(spans) <= 8:
-            prompt = self._build_per_fact_template_prompt(question, spans, citation_count)
+            prompt = self._build_per_fact_template_prompt(
+                question, spans, citation_count, template_preview_chars,
+                preserve_span_newlines, template_prompt,
+            )
         else:
-            prompt = self._build_aggregate_template_prompt(question, spans, citation_count)
+            prompt = self._build_aggregate_template_prompt(
+                question, spans, citation_count, template_preview_chars,
+                preserve_span_newlines, template_prompt,
+            )
 
         try:
-            return await self.complete_async(prompt, temperature=self.temperature)
+            return await self.complete_async(
+                prompt, temperature=self.temperature, system_prompt=system_prompt
+            )
         except Exception as e:
             logger.error("Async template generation failed: %s", e)
             return self._fallback_template(citation_count > 0)
@@ -307,40 +331,63 @@ class LLMClient:
         )
 
     def _build_per_fact_template_prompt(
-        self, question: str, spans: List[str], citation_count: int
+        self,
+        question: str,
+        spans: List[str],
+        citation_count: int,
+        template_preview_chars: Optional[int] = 100,
+        preserve_span_newlines: bool = False,
+        template_prompt: Optional[str] = None,
     ) -> str:
-        """Build prompt for per-fact template generation."""
-        from .prompts import load_prompt
+        from .prompts import load_prompt, render_prompt
 
         span_lines = []
         for i, span in enumerate(spans, start=1):
-            clean = span.replace("\n", " ").strip()[:100]  # Truncate for prompt size
-            span_lines.append(f"{i}. {clean}...")
+            text = span if preserve_span_newlines else span.replace("\n", " ")
+            text = text.strip()
+            if template_preview_chars is not None:
+                text = text[:template_preview_chars]
+            suffix = "..." if template_preview_chars is not None else ""
+            span_lines.append(f"{i}. {text}{suffix}")
         spans_block = "\n".join(span_lines)
 
-        return load_prompt(
-            "template/per_fact",
+        ctx = dict(
             question=question,
             n_spans=len(spans),
             spans_block=spans_block,
             citation_count=citation_count,
         )
+        if template_prompt is not None:
+            return render_prompt(template_prompt, **ctx)
+        return load_prompt("template/per_fact", **ctx)
 
     def _build_aggregate_template_prompt(
-        self, question: str, spans: List[str], citation_count: int
+        self,
+        question: str,
+        spans: List[str],
+        citation_count: int,
+        template_preview_chars: Optional[int] = 100,
+        preserve_span_newlines: bool = False,
+        template_prompt: Optional[str] = None,
     ) -> str:
-        """Build prompt for aggregate template generation."""
-        from .prompts import load_prompt
+        from .prompts import load_prompt, render_prompt
 
-        span_preview = " | ".join(span[:50] + "..." for span in spans[:3])
+        preview_chars = 50 if template_preview_chars is None else min(50, template_preview_chars)
+        preview_spans = []
+        for span in spans[:3]:
+            text = span if preserve_span_newlines else span.replace("\n", " ")
+            preview_spans.append(text[:preview_chars] + "...")
+        span_preview = " | ".join(preview_spans)
 
-        return load_prompt(
-            "template/aggregate",
+        ctx = dict(
             question=question,
             n_spans=len(spans),
             span_preview=span_preview,
             citation_count=citation_count,
         )
+        if template_prompt is not None:
+            return render_prompt(template_prompt, **ctx)
+        return load_prompt("template/aggregate", **ctx)
 
     def _fallback_template(self, has_citations: bool = False) -> str:
         """Return a simple fallback template when generation fails."""

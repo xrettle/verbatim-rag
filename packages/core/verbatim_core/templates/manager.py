@@ -281,11 +281,23 @@ class TemplateManager:
 
         self.set_mode("static")
 
-    def use_contextual_mode(self, use_per_fact: bool = True) -> bool:
+    def use_contextual_mode(
+        self,
+        use_per_fact: bool = True,
+        template_preview_chars: Optional[int] = 100,
+        preserve_span_newlines: bool = False,
+        template_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+    ) -> bool:
         """
         Switch to contextual mode with configuration.
 
-        :param use_per_fact: Whether to use per-fact placeholders
+        :param use_per_fact: Whether to use per-span placeholders (≤8 spans).
+        :param template_preview_chars: Max chars per span in the template-gen prompt.
+            None = full span. Default 100 (pre-0.2.8 behaviour).
+        :param preserve_span_newlines: Keep newlines in spans shown to the template LLM.
+        :param template_prompt: Custom Jinja2 prompt string (see ContextualTemplate).
+        :param system_prompt: System message for the template-generation call.
         :return: True if switched successfully
         """
         if not self.llm_client:
@@ -293,10 +305,16 @@ class TemplateManager:
             return False
 
         if self.strategies["contextual"] is None:
-            self.strategies["contextual"] = ContextualTemplate(self.llm_client)
+            self.strategies["contextual"] = ContextualTemplate(
+                self.llm_client, citation_mode=self.citation_mode
+            )
 
         contextual_strategy = self.strategies["contextual"]
         contextual_strategy.set_per_fact_mode(use_per_fact)
+        contextual_strategy.template_preview_chars = template_preview_chars
+        contextual_strategy.preserve_span_newlines = preserve_span_newlines
+        contextual_strategy.template_prompt = template_prompt
+        contextual_strategy.system_prompt = system_prompt
 
         return self.set_mode("contextual")
 
@@ -436,11 +454,7 @@ class TemplateManager:
         return response.answer
 
     def set_citation_mode(self, mode: str) -> None:
-        """
-        Configure how citations are rendered inside filled templates.
-
-        :param mode: Citation rendering mode ("inline" or "hidden")
-        """
+        """Configure how citations are rendered inside filled templates ("inline" or "hidden")."""
         allowed = {"inline", "hidden"}
         if mode not in allowed:
             raise ValueError(f"Unsupported citation mode: {mode}")
@@ -450,3 +464,15 @@ class TemplateManager:
         for strategy in self.strategies.values():
             if strategy and hasattr(strategy, "set_citation_mode"):
                 strategy.set_citation_mode(mode)
+
+    def set_citation_format(self, citation_format: str) -> None:
+        """
+        Configure citation marker format for all strategies.
+
+        :param citation_format: str.format template with {number} and {span_id} variables.
+            Default "[{number}]". Example: "[{span_id}]" renders "[cite1]" when
+            span data includes {"span_id": "cite1"}.
+        """
+        for strategy in self.strategies.values():
+            if strategy and hasattr(strategy, "set_citation_format"):
+                strategy.set_citation_format(citation_format)

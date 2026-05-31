@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.8] - 2026-05-31
+
+### Added
+- **FR-1** `TemplateFiller`, `StaticTemplate`, `ContextualTemplate`, and `TemplateManager` now accept a `citation_format` parameter (default `"[{number}]"`). Supports `{number}` (sequential integer) and `{span_id}` (from span data, falls back to `str(number)`). Use `citation_format="[{span_id}]"` to render markers like `[cite1]` directly from span ids. Fully backward compatible — default reproduces pre-0.2.8 output exactly.
+- **FR-2** `ContextualTemplate` and `TemplateManager.use_contextual_mode` accept `template_preview_chars` (default `100`, `None` = no truncation) and `preserve_span_newlines` (default `False`). Allows multi-line structured spans (e.g. dosage blocks) to reach the template LLM without being collapsed or cut.
+- **FR-3** `ContextualTemplate` and `TemplateManager.use_contextual_mode` accept `template_prompt` (custom Jinja2 string replacing the bundled per-fact/aggregate prompt) and `system_prompt` (system message for the template-generation call). Mirrors the `LLMSpanExtractor` API for custom extraction prompts.
+
+### Fixed
+- `QueryResponse.documents` field used Pydantic v1 `min_items=0` (deprecation warning under Pydantic 2); replaced with `default_factory=list` and migrated `class Config` to `model_config`.
+
+### Changed
+- `verbatim-rag` now requires `verbatim-core>=0.2.8`.
+
 ## [0.2.7] - 2026-05-22
 
 ### Changed

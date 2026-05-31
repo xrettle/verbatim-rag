@@ -29,15 +29,21 @@ Based on the available documents, here are the key findings:
 ---
 *These excerpts are taken verbatim from the source documents to ensure accuracy.*"""
 
-    def __init__(self, template: str = None, citation_mode: str = "inline"):
+    def __init__(
+        self,
+        template: str = None,
+        citation_mode: str = "inline",
+        citation_format: str = "[{number}]",
+    ):
         """
         Initialize static template strategy.
 
         :param template: Custom template string (uses default if None)
+        :param citation_format: See TemplateFiller for format string contract.
         """
         self.template = template or self.DEFAULT_TEMPLATE
         self.citation_mode = citation_mode
-        self.filler = TemplateFiller(citation_mode=citation_mode)
+        self.filler = TemplateFiller(citation_mode=citation_mode, citation_format=citation_format)
         self.validate_template(self.template)
 
     def generate(self, question: str, spans: List[str], citation_count: int = 0) -> str:
@@ -96,11 +102,11 @@ Based on the available documents, here are the key findings:
         self.template = template
 
     def set_citation_mode(self, citation_mode: str) -> None:
-        """
-        Update citation display mode (inline vs hidden).
-        """
         self.citation_mode = citation_mode
         self.filler.set_citation_mode(citation_mode)
+
+    def set_citation_format(self, citation_format: str) -> None:
+        self.filler.citation_format = citation_format
 
     def get_template(self) -> str:
         """

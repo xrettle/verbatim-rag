@@ -44,13 +44,12 @@ class StructuredAnswer(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+
     question: str = Field(..., min_length=1)
     answer: str = Field(..., min_length=1)
     structured_answer: StructuredAnswer
-    documents: list[DocumentWithHighlights] = Field(..., min_items=0)
-
-    class Config:
-        arbitrary_types_allowed = True
+    documents: list[DocumentWithHighlights] = Field(default_factory=list)
 
 
 class StreamingResponseType(Enum):
