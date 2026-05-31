@@ -272,13 +272,21 @@ class LLMClient:
         """
         if use_per_fact and len(spans) <= 8:
             prompt = self._build_per_fact_template_prompt(
-                question, spans, citation_count, template_preview_chars,
-                preserve_span_newlines, template_prompt,
+                question,
+                spans,
+                citation_count,
+                template_preview_chars,
+                preserve_span_newlines,
+                template_prompt,
             )
         else:
             prompt = self._build_aggregate_template_prompt(
-                question, spans, citation_count, template_preview_chars,
-                preserve_span_newlines, template_prompt,
+                question,
+                spans,
+                citation_count,
+                template_preview_chars,
+                preserve_span_newlines,
+                template_prompt,
             )
 
         try:
@@ -303,13 +311,21 @@ class LLMClient:
         """
         if use_per_fact and len(spans) <= 8:
             prompt = self._build_per_fact_template_prompt(
-                question, spans, citation_count, template_preview_chars,
-                preserve_span_newlines, template_prompt,
+                question,
+                spans,
+                citation_count,
+                template_preview_chars,
+                preserve_span_newlines,
+                template_prompt,
             )
         else:
             prompt = self._build_aggregate_template_prompt(
-                question, spans, citation_count, template_preview_chars,
-                preserve_span_newlines, template_prompt,
+                question,
+                spans,
+                citation_count,
+                template_preview_chars,
+                preserve_span_newlines,
+                template_prompt,
             )
 
         try:
