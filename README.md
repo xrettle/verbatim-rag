@@ -11,6 +11,8 @@ A minimalistic approach to Retrieval-Augmented Generation (RAG) that prevents ha
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1IACXwo3ezgA1yXarxVOC4yXjdUPmOI1H?usp=sharing)
 [![ACL 2025](https://img.shields.io/badge/ACL%20Anthology-2025.bionlp--share.8-blue)](https://aclanthology.org/2025.bionlp-share.8/)
+[![arXiv](https://img.shields.io/badge/arXiv-2605.21102-b31b1b.svg)](https://arxiv.org/abs/2605.21102)
+[![HF Collection](https://img.shields.io/badge/🤗%20HuggingFace-verbatim--rag--v1-yellow)](https://huggingface.co/collections/KRLabsOrg/verbatim-rag-v1)
 
 ## Concept
 
@@ -18,9 +20,9 @@ Traditional RAG systems retrieve relevant documents and then allow an LLM to fre
 
 Verbatim RAG solves this by extracting verbatim text spans from documents and composing responses entirely from these exact passages, with direct citations linking back to sources.
 
-For extraction, we can use LLM-based span extractors or fine-tuned encoder-based models like ModernBERT. We've trained our own ModernBERT model for this purpose, which is available on [HuggingFace](https://huggingface.co/KRLabsOrg/verbatim-rag-modern-bert-v1) (we've trained it on the [RAGBench](https://huggingface.co/datasets/galileo-ai/ragbench) dataset).
+For extraction, we provide two 150M-parameter ModernBERT token classifiers that beat public extractive baselines (Zilliz Semantic Highlight, Provence) across ACL, RAGBench, Squeez, and QASPER — and outperform LLM-based extractors 100× their size on our ACL-Verbatim benchmark. See the [paper](https://arxiv.org/abs/2605.21102) and [HF collection](https://huggingface.co/collections/KRLabsOrg/verbatim-rag-v1) for details.
 
-With this approach, **the whole RAG pipeline can be run without any usage of LLMs**, and with using SPLADE embeddings, the pipeline can be run entirely on CPU, making it lightweight and efficient.
+With this approach, **the whole RAG pipeline can be run without any usage of LLMs**, and with SPLADE embeddings, the pipeline can be run entirely on CPU, making it lightweight and efficient.
 
 ## Installation
 
@@ -160,13 +162,13 @@ npm install
 npm start
 ```
 
-## ModernBERT Based Span Extractor
+## ModernBERT Span Extractor
 
-We've trained our own encoder model based on ModernBERT for sentence classification. This model is designed to classify text spans as relevant or not, providing a robust alternative to LLM-based extractors.
+[KRLabsOrg/verbatim-rag-modern-bert-v2](https://huggingface.co/KRLabsOrg/verbatim-rag-modern-bert-v2) is a 150M-parameter query-conditioned token classifier built on `gte-reranker-modernbert-base`. It supports up to 8,192 tokens and is trained on scientific papers, Wikipedia QA, financial tables, medical literature, legal contracts, product manuals, and code/tool output.
 
-You can find our model on HuggingFace: [KRLabsOrg/verbatim-rag-modern-bert-v1](https://huggingface.co/KRLabsOrg/verbatim-rag-modern-bert-v1).
+It beats public extractive baselines (Zilliz Semantic Highlight, Provence) across ACL, RAGBench, Squeez, and QASPER. See the [paper](https://arxiv.org/abs/2605.21102) for full results.
 
-You can use it with the defined index as follows:
+`ModelSpanExtractor` defaults to this model:
 
 ```python
 from verbatim_rag.core import VerbatimRAG
@@ -175,10 +177,14 @@ from verbatim_rag.extractors import ModelSpanExtractor
 from verbatim_rag.vector_stores import LocalMilvusStore
 from verbatim_rag.embedding_providers import SpladeProvider
 
-# Load your trained extractor
-extractor = ModelSpanExtractor("KRLabsOrg/verbatim-rag-modern-bert-v1")
+extractor = ModelSpanExtractor(
+    model_path="KRLabsOrg/verbatim-rag-modern-bert-v2",  # default
+    threshold=0.2,
+    min_span_chars=30,
+    merge_gap_chars=20,
+    device=None,  # auto-detects cuda, mps, cpu
+)
 
-# Create embedding provider and vector store
 sparse_provider = SpladeProvider(
     model_name="opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill",
     device="cpu"
@@ -189,31 +195,37 @@ vector_store = LocalMilvusStore(
     enable_dense=False,
     enable_sparse=True,
 )
+index = VerbatimIndex(vector_store=vector_store, sparse_provider=sparse_provider)
 
-# Create index with providers
-# (Assuming you have already populated the index)
-index = VerbatimIndex(
-    vector_store=vector_store,
-    sparse_provider=sparse_provider
-)
-
-# Create VerbatimRAG system with custom extractor
-rag_system = VerbatimRAG(
-    index=index,
-    extractor=extractor,
-    k=5
-)
-
-# Query the system
+rag_system = VerbatimRAG(index=index, extractor=extractor, k=5)
 response = rag_system.query("Main findings of the paper?")
 print(response.answer)
 ```
 
+### Datasets
+
+| Resource | Link |
+|---|---|
+| 114K ACL Anthology papers in structured Markdown | [KRLabsOrg/acl-anthology-md](https://huggingface.co/datasets/KRLabsOrg/acl-anthology-md) |
+| 20K+ labelled query-chunk training pairs | [KRLabsOrg/verbatim-spans](https://huggingface.co/datasets/KRLabsOrg/verbatim-spans) |
+| Human-annotated ACL extraction benchmark | [KRLabsOrg/acl-verbatim-spans](https://huggingface.co/datasets/KRLabsOrg/acl-verbatim-spans) |
+| Training and evaluation pipeline | [KRLabsOrg/acl-verbatim](https://github.com/KRLabsOrg/acl-verbatim) |
+
 ## Citation
 
-If you use Verbatim RAG in your research, please cite our paper:
+If you use Verbatim RAG or the extractive models in your research, please cite our papers:
 
 ```bibtex
+@misc{Recski:2026,
+    title={ACL-Verbatim: hallucination-free question answering for research},
+    author={Gábor Recski and Szilveszter Tóth and Nadia Verdha and István Boros and Ádám Kovács},
+    year={2026},
+    eprint={2605.21102},
+    archivePrefix={arXiv},
+    primaryClass={cs.CL},
+    url={https://arxiv.org/abs/2605.21102},
+}
+
 @inproceedings{kovacs-etal-2025-kr,
     title = "{KR} Labs at {A}rch{EHR}-{QA} 2025: A Verbatim Approach for Evidence-Based Question Answering",
     author = "Kovacs, Adam  and
