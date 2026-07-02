@@ -60,6 +60,14 @@ Both packages share the same version number. To release:
    cd ../.. && python -m build && twine upload dist/*
    ```
 
-## License
+## Contribution rights
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By submitting a pull request you confirm that you wrote the contribution (or
+have the right to submit it) and that it may be distributed under this
+repository's MIT license (this is what the checkbox in the PR template
+attests). Optionally you can also sign off commits with `git commit -s`
+([DCO](https://developercertificate.org/)); appreciated, not required.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
